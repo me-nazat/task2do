@@ -27,9 +27,6 @@ export function NotificationManager() {
                 body: task.title,
                 icon: '/favicon.ico', // You can add a custom icon
               });
-            } else if ('Notification' in window && Notification.permission !== 'denied') {
-              // Fallback to alert if notifications are not supported or denied
-              alert(`Reminder: ${task.title}`);
             }
           }
         }

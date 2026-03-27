@@ -34,6 +34,8 @@ interface AppState {
   searchQuery: string;
   tasks: Task[];
   lists: List[];
+  user: { id: string; email: string | null; displayName: string | null } | null;
+  isAuthReady: boolean;
   
   setCurrentView: (view: ViewType) => void;
   setSelectedListId: (id: string | null) => void;
@@ -43,6 +45,8 @@ interface AppState {
   setSearchQuery: (query: string) => void;
   setTasks: (tasks: Task[]) => void;
   setLists: (lists: List[]) => void;
+  setUser: (user: { id: string; email: string | null; displayName: string | null } | null) => void;
+  setAuthReady: (ready: boolean) => void;
   addTask: (task: Task) => void;
   addList: (list: List) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -58,6 +62,8 @@ export const useStore = create<AppState>((set) => ({
   searchQuery: '',
   tasks: [],
   lists: [],
+  user: null,
+  isAuthReady: false,
 
   setCurrentView: (view) => set({ currentView: view }),
   setSelectedListId: (id) => set({ selectedListId: id }),
@@ -67,6 +73,8 @@ export const useStore = create<AppState>((set) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   setTasks: (tasks) => set({ tasks }),
   setLists: (lists) => set({ lists }),
+  setUser: (user) => set({ user }),
+  setAuthReady: (ready) => set({ isAuthReady: ready }),
   addTask: (task) => set((state) => ({ tasks: [...state.tasks, task] })),
   addList: (list) => set((state) => ({ lists: [...state.lists, list] })),
   updateTask: (id, updates) => set((state) => ({

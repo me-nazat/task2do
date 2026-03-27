@@ -6,60 +6,79 @@ import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { revalidatePath } from 'next/cache';
 
-export async function getTasks() {
-  return await db.select().from(tasks).orderBy(tasks.createdAt);
+export async function getTasks(userId: string) {
+  try {
+    return await db.select().from(tasks).where(eq(tasks.userId, userId)).orderBy(tasks.createdAt);
+  } catch (error) {
+    console.error('Failed to get tasks', error);
+    return [];
+  }
 }
 
-export async function createTask(data: { title: string; listId?: string; startDate?: Date; isAllDay?: boolean; parentId?: string; quadrant?: string }) {
-  const id = uuidv4();
-  // Using a dummy user ID for now since auth is not implemented
-  const userId = 'user_1'; 
-  
-  // Ensure dummy user exists
-  const existingUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (existingUser.length === 0) {
-    await db.insert(users).values({
-      id: userId,
-      email: 'dummy@example.com',
-      name: 'Dummy User',
+export async function createTask(data: { title: string; listId?: string; startDate?: Date; isAllDay?: boolean; parentId?: string; quadrant?: string; userId: string }) {
+  try {
+    const id = uuidv4();
+    const { userId, ...taskData } = data;
+    
+    // Ensure user exists
+    const existingUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (existingUser.length === 0) {
+      await db.insert(users).values({
+        id: userId,
+        email: 'user@example.com', // We don't have the email here easily, but we can update it later
+        name: 'User',
+        createdAt: new Date(),
+      });
+    }
+
+    // Handle smart lists
+    const smartLists = ['inbox', 'today', 'upcoming', 'someday', 'matrix'];
+    const actualListId = data.listId && !smartLists.includes(data.listId) ? data.listId : null;
+    
+    await db.insert(tasks).values({
+      id,
+      userId,
+      title: data.title,
+      listId: actualListId,
+      startDate: data.startDate || null,
+      isAllDay: data.isAllDay || false,
+      parentId: data.parentId || null,
+      quadrant: data.quadrant || null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     });
+
+    revalidatePath('/');
+    return id;
+  } catch (error) {
+    console.error('Failed to create task', error);
+    throw error;
   }
-
-  // Handle smart lists
-  const smartLists = ['inbox', 'today', 'upcoming', 'someday', 'matrix'];
-  const actualListId = data.listId && !smartLists.includes(data.listId) ? data.listId : null;
-  
-  await db.insert(tasks).values({
-    id,
-    userId,
-    title: data.title,
-    listId: actualListId,
-    startDate: data.startDate || null,
-    isAllDay: data.isAllDay || false,
-    parentId: data.parentId || null,
-    quadrant: data.quadrant || null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
-
-  revalidatePath('/');
-  return id;
 }
 
 export async function updateTask(id: string, data: Partial<typeof tasks.$inferInsert>) {
-  const smartLists = ['inbox', 'today', 'upcoming', 'someday', 'matrix'];
-  const updateData = { ...data, updatedAt: new Date() };
-  
-  if (updateData.listId && smartLists.includes(updateData.listId)) {
-    updateData.listId = null;
-  }
+  try {
+    const smartLists = ['inbox', 'today', 'upcoming', 'someday', 'matrix'];
+    const updateData = { ...data, updatedAt: new Date() };
+    
+    if (updateData.listId && smartLists.includes(updateData.listId)) {
+      updateData.listId = null;
+    }
 
-  await db.update(tasks).set(updateData).where(eq(tasks.id, id));
-  revalidatePath('/');
+    await db.update(tasks).set(updateData).where(eq(tasks.id, id));
+    revalidatePath('/');
+  } catch (error) {
+    console.error('Failed to update task', error);
+    throw error;
+  }
 }
 
 export async function deleteTask(id: string) {
-  await db.delete(tasks).where(eq(tasks.id, id));
-  revalidatePath('/');
+  try {
+    await db.delete(tasks).where(eq(tasks.id, id));
+    revalidatePath('/');
+  } catch (error) {
+    console.error('Failed to delete task', error);
+    throw error;
+  }
 }

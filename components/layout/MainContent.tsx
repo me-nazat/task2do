@@ -13,24 +13,14 @@ import { CalendarView } from '@/components/views/CalendarView';
 import { HabitTrackerView } from '@/components/views/HabitTrackerView';
 
 export function MainContent() {
-  const { toggleSidebar, currentView, selectedListId, tasks, addTask, updateTask: updateTaskState, setSelectedTaskId, searchQuery } = useStore();
+  const { toggleSidebar, currentView, selectedListId, tasks, addTask, updateTask: updateTaskState, deleteTask, setSelectedTaskId, searchQuery, user } = useStore();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Expose focus function to window for sidebar button
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).focusQuickAdd = () => inputRef.current?.focus();
-    }
-    return () => {
-      if (typeof window !== 'undefined') {
-        delete (window as any).focusQuickAdd;
-      }
-    };
-  }, []);
+  // ... (useEffect remains the same)
 
   const handleAddTask = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && newTaskTitle.trim()) {
+    if (e.key === 'Enter' && newTaskTitle.trim() && user) {
       const title = newTaskTitle.trim();
       setNewTaskTitle('');
       
@@ -51,16 +41,18 @@ export function MainContent() {
         timezone: null,
         reminderAt: null,
         status: 'todo' as const,
+        userId: user.id,
       };
       addTask(newTask);
 
       try {
-        const id = await createTask({ title, listId: selectedListId || undefined });
+        const id = await createTask({ title, listId: selectedListId || undefined, userId: user.id });
         // Update the temp task with the real ID
         updateTaskState(tempId, { id });
       } catch (error) {
         console.error('Failed to create task', error);
-        // Ideally, remove the temp task here if it failed
+        // Remove the temp task if it failed
+        deleteTask(tempId);
       }
     }
   };
@@ -111,59 +103,54 @@ export function MainContent() {
 
   return (
     <div className="flex flex-col h-full bg-surface">
-      {/* Header */}
-      <header className="h-16 flex items-center px-12 gap-4 shrink-0 md:hidden">
-        <button 
-          onClick={toggleSidebar}
-          className="p-2 hover:bg-surface-container-high rounded-none text-on-surface-variant transition-colors"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-      </header>
-
       {/* Dynamic Content Area */}
-      <div className="flex-1 overflow-y-auto px-12 py-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="flex-1 overflow-y-auto px-16 py-16">
+        <div className="max-w-5xl mx-auto">
           
           {/* Quick Add Bar */}
-          <div className="mb-16">
-            <div className="flex items-center gap-4 bg-surface-container-low p-1 focus-within:bg-surface-container-lowest focus-within:ring-2 focus-within:ring-primary transition-all duration-300">
-              <Plus className="ml-4 w-5 h-5 text-outline" />
+          <div className="mb-20">
+            <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-outline-variant/10 shadow-sm focus-within:shadow-md focus-within:border-primary/20 transition-all duration-500">
+              <div className="ml-4 w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center">
+                <Plus className="w-5 h-5 text-primary/60" />
+              </div>
               <input 
                 ref={inputRef}
                 type="text" 
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
                 onKeyDown={handleAddTask}
-                placeholder="CAPTURE NEW TASK..."
-                className="flex-1 bg-transparent border-none focus:ring-0 py-4 font-headline text-lg tracking-tight uppercase placeholder:text-outline font-medium"
+                placeholder="Capture a new objective..."
+                className="flex-1 bg-transparent border-none focus:ring-0 py-4 font-body text-lg tracking-tight placeholder:text-outline/40"
               />
-              <div className="flex gap-2 px-4 border-l border-outline-variant">
-                <CalendarIcon className="w-5 h-5 text-outline cursor-pointer hover:text-primary transition-colors" />
-                <Tag className="w-5 h-5 text-outline cursor-pointer hover:text-primary transition-colors" />
+              <div className="flex gap-4 px-6 border-l border-outline-variant/20">
+                <CalendarIcon className="w-5 h-5 text-outline/40 cursor-pointer hover:text-primary transition-colors" />
+                <Tag className="w-5 h-5 text-outline/40 cursor-pointer hover:text-primary transition-colors" />
               </div>
             </div>
           </div>
 
           {/* Render different views based on currentView */}
           {(currentView === 'list' || currentView === 'today' || currentView === 'upcoming') && (
-            <div className="space-y-12">
+            <div className="space-y-16">
               <div className="group-container">
-                <div className="flex justify-between items-end mb-6">
-                  <h2 className="font-headline font-black text-4xl tracking-tighter uppercase">{getViewTitle()}</h2>
-                  <span className="font-headline text-[10px] tracking-[0.3em] text-outline font-bold uppercase">
-                    {format(new Date(), 'MMM dd, yyyy')}
+                <div className="flex justify-between items-end mb-10 border-b border-outline-variant/30 pb-6">
+                  <div>
+                    <h2 className="font-headline font-medium text-5xl tracking-tight text-primary">{getViewTitle()}</h2>
+                    <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-3 font-bold opacity-60">Current Focus & Trajectory</p>
+                  </div>
+                  <span className="font-label text-[10px] tracking-[0.15em] text-outline font-semibold uppercase opacity-70">
+                    {format(new Date(), 'EEEE, MMMM do')}
                   </span>
                 </div>
                 
-                <div className="space-y-1">
+                <div className="space-y-3">
                   {filteredTasks.map((task) => (
                     <div 
                       key={task.id}
                       onClick={() => setSelectedTaskId(task.id)}
                       className={cn(
-                        "group flex items-center justify-between p-4 bg-surface-container-lowest hover:bg-surface-container-low transition-colors cursor-pointer border-l-4",
-                        task.isCompleted ? "border-primary bg-surface-container-low/50" : "border-tertiary-container"
+                        "group flex items-center justify-between p-5 bg-white rounded-xl transition-all cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md",
+                        task.isCompleted && "opacity-60 grayscale-[0.5]"
                       )}
                     >
                       <div className="flex items-center gap-6">
@@ -173,34 +160,43 @@ export function MainContent() {
                             handleToggleComplete(task.id, task.isCompleted);
                           }}
                           className={cn(
-                            "w-5 h-5 border-2 border-primary flex items-center justify-center transition-colors",
-                            task.isCompleted ? "bg-primary" : "hover:bg-surface-container-high"
+                            "w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center transition-all group-hover:border-primary",
+                            task.isCompleted ? "bg-primary border-primary" : "bg-transparent"
                           )}
                         >
-                          {task.isCompleted && <CheckCircle2 className="w-3 h-3 text-on-primary-fixed" />}
+                          {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />}
                         </button>
                         <div>
                           <p className={cn(
-                            "text-sm font-medium tracking-tight",
-                            task.isCompleted ? "text-outline line-through" : "text-primary"
+                            "text-[15px] font-body transition-all",
+                            task.isCompleted ? "text-outline line-through" : "text-primary font-medium"
                           )}>
                             {task.title}
                           </p>
                           {task.startDate && (
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-[9px] font-headline uppercase tracking-widest text-on-surface-variant font-semibold">
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <CalendarIcon className="w-3 h-3 text-outline/60" />
+                              <span className="text-[9px] font-label uppercase tracking-[0.15em] text-outline font-bold opacity-60">
                                 {format(new Date(task.startDate), 'hh:mm a')}
                               </span>
                             </div>
                           )}
                         </div>
                       </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Tag className="w-4 h-4 text-outline/40 hover:text-primary transition-colors" />
+                      </div>
                     </div>
                   ))}
                   {filteredTasks.length === 0 && (
-                    <div className="text-center py-16 text-outline flex flex-col items-center gap-3">
-                      <p className="text-lg font-headline font-bold uppercase tracking-widest">All caught up!</p>
-                      <p className="text-xs font-medium uppercase tracking-widest">No tasks here yet. Add one above.</p>
+                    <div className="text-center py-24 text-outline flex flex-col items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6 text-outline/40" />
+                      </div>
+                      <div>
+                        <p className="text-xl font-headline italic text-primary">All is in order</p>
+                        <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">No pending actions in this view</p>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -10,19 +10,34 @@ import { getTasks } from '@/actions/task';
 import { getLists } from '@/actions/list';
 import { NotificationManager } from '@/components/NotificationManager';
 import { Task, List } from '@/store/useStore';
-import { Settings, Bell, Search } from 'lucide-react';
+import { Settings, Bell, Search, Menu } from 'lucide-react';
 
 export function DashboardLayout() {
-  const { isSidebarOpen, isRightPaneOpen, setTasks, setLists, selectedTaskId } = useStore();
+  const { isSidebarOpen, isRightPaneOpen, toggleSidebar, setTasks, setLists, selectedTaskId, user, isAuthReady } = useStore();
 
   useEffect(() => {
-    getTasks().then((tasks) => {
-      setTasks(tasks as Task[]);
-    });
-    getLists().then((lists) => {
-      setLists(lists as List[]);
-    });
-  }, [setTasks, setLists]);
+    if (isAuthReady && user) {
+      getTasks(user.id)
+        .then((tasks) => {
+          setTasks(tasks as Task[]);
+        })
+        .catch((error) => {
+          console.error('Failed to get tasks', error);
+          setTasks([]);
+        });
+      getLists(user.id)
+        .then((lists) => {
+          setLists(lists as List[]);
+        })
+        .catch((error) => {
+          console.error('Failed to get lists', error);
+          setLists([]);
+        });
+    } else if (isAuthReady && !user) {
+      setTasks([]);
+      setLists([]);
+    }
+  }, [setTasks, setLists, user, isAuthReady]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-surface text-on-surface">
@@ -31,22 +46,27 @@ export function DashboardLayout() {
       {/* Left Sidebar */}
       <div
         className={cn(
-          "h-full transition-all duration-300 ease-in-out-expo flex-shrink-0 z-40",
-          isSidebarOpen ? "w-64 opacity-100" : "w-0 opacity-0 overflow-hidden"
+          "h-full transition-all duration-500 ease-in-out flex-shrink-0 z-40",
+          isSidebarOpen ? "w-72 opacity-100" : "w-0 opacity-0 overflow-hidden"
         )}
       >
         <Sidebar />
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-surface-container-lowest">
+      <main className="flex-1 flex flex-col min-w-0 bg-white">
         {/* Mobile Header */}
-        <header className="md:hidden flex justify-between items-center w-full px-8 py-4 bg-surface-container-lowest z-50 border-b-2 border-transparent">
-          <span className="text-2xl font-black tracking-tighter text-primary font-headline uppercase">TASK2DO</span>
-          <div className="flex gap-4 items-center">
-            <Bell className="w-5 h-5 text-primary cursor-pointer" />
-            <div className="w-8 h-8 bg-primary text-on-primary-fixed flex items-center justify-center font-headline font-bold text-xs">
-              T2
+        <header className="md:hidden flex justify-between items-center w-full px-8 py-6 bg-white z-50 border-b border-outline-variant/10">
+          <div className="flex items-center gap-4">
+            <button onClick={toggleSidebar} className="p-2 hover:bg-surface-container-high rounded-full transition-colors">
+              <Menu className="w-5 h-5 text-outline/60" />
+            </button>
+            <span className="text-2xl font-light tracking-tight text-primary font-headline italic">Task2Do</span>
+          </div>
+          <div className="flex gap-5 items-center">
+            <Bell className="w-5 h-5 text-outline/60 cursor-pointer hover:text-primary transition-colors" />
+            <div className="w-9 h-9 rounded-full bg-primary text-on-primary flex items-center justify-center font-headline font-medium text-xs shadow-sm overflow-hidden">
+              {user?.displayName ? user.displayName[0] : 'U'}
             </div>
           </div>
         </header>

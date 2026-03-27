@@ -112,18 +112,18 @@ export function DateTimePicker({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
         {/* Date Picker */}
         <Popover.Root>
           <Popover.Trigger asChild>
-            <button className="flex items-center gap-2 px-4 py-2 text-sm bg-muted/30 hover:bg-muted/50 rounded-full transition-colors border border-transparent hover:border-border/30">
-              <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-              {date ? format(date, 'PPP') : 'Pick a date'}
+            <button className="flex items-center gap-3 px-5 py-2.5 text-[13px] font-body font-medium bg-primary/5 hover:bg-primary/10 rounded-full transition-all border border-primary/5 hover:border-primary/20 text-primary">
+              <CalendarIcon className="w-4 h-4 text-primary/60" />
+              {date ? format(date, 'PPP') : 'Select Date'}
             </button>
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content className="z-50 bg-popover text-popover-foreground p-4 rounded-3xl border shadow-xl animate-in fade-in zoom-in-95" sideOffset={8}>
+            <Popover.Content className="z-50 bg-white p-6 rounded-3xl border border-outline-variant/10 shadow-2xl animate-in fade-in zoom-in-95" sideOffset={12}>
               <DayPicker
                 mode="single"
                 selected={date}
@@ -131,24 +131,23 @@ export function DateTimePicker({
                 className="p-0 m-0"
                 classNames={{
                   months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-                  month: "space-y-4",
-                  caption: "flex justify-center pt-1 relative items-center",
-                  caption_label: "text-sm font-medium",
+                  month: "space-y-6",
+                  caption: "flex justify-center pt-1 relative items-center mb-4",
+                  caption_label: "text-[15px] font-headline font-medium italic text-primary",
                   nav: "space-x-1 flex items-center",
-                  nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 transition-opacity",
+                  nav_button: "h-8 w-8 bg-primary/5 rounded-full p-0 opacity-60 hover:opacity-100 transition-all hover:bg-primary/10",
                   nav_button_previous: "absolute left-1",
                   nav_button_next: "absolute right-1",
                   table: "w-full border-collapse space-y-1",
                   head_row: "flex",
-                  head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
+                  head_cell: "text-outline/40 rounded-md w-10 font-body font-bold text-[10px] uppercase tracking-[0.1em]",
                   row: "flex w-full mt-2",
-                  cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                  day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground rounded-full transition-colors",
-                  day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                  day_today: "bg-accent text-accent-foreground",
-                  day_outside: "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-                  day_disabled: "text-muted-foreground opacity-50",
-                  day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                  cell: "h-10 w-10 text-center text-[13px] p-0 relative focus-within:relative focus-within:z-20",
+                  day: "h-10 w-10 p-0 font-body font-medium aria-selected:opacity-100 hover:bg-primary/5 hover:text-primary rounded-full transition-all",
+                  day_selected: "bg-primary text-on-primary hover:bg-primary hover:text-on-primary focus:bg-primary focus:text-on-primary shadow-md",
+                  day_today: "bg-primary/10 text-primary",
+                  day_outside: "day-outside text-outline/20 opacity-50",
+                  day_disabled: "text-outline/10 opacity-50",
                   day_hidden: "invisible",
                 }}
               />
@@ -159,28 +158,28 @@ export function DateTimePicker({
         {/* Time Selection (only if not all day) */}
         {!isAllDay && date && (
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-muted/30 hover:bg-muted/50 px-3 py-2 rounded-full border border-transparent transition-colors">
-              <Clock className="w-4 h-4 text-muted-foreground" />
+            <div className="flex items-center gap-2 bg-primary/5 hover:bg-primary/10 px-4 py-2.5 rounded-full border border-primary/5 transition-all text-primary">
+              <Clock className="w-4 h-4 text-primary/60" />
               <select
                 value={startTime}
                 onChange={(e) => {
                   setStartTime(e.target.value);
                   updateDates(date, e.target.value, endTime, false, reminderOffset);
                 }}
-                className="bg-transparent border-none focus:outline-none text-sm cursor-pointer"
+                className="bg-transparent border-none focus:outline-none text-[13px] font-body font-medium cursor-pointer"
               >
                 {timeOptions.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
-              <span className="text-muted-foreground mx-1">-</span>
+              <span className="text-primary/30 mx-1">/</span>
               <select
                 value={endTime}
                 onChange={(e) => {
                   setEndTime(e.target.value);
                   updateDates(date, startTime, e.target.value, false, reminderOffset);
                 }}
-                className="bg-transparent border-none focus:outline-none text-sm cursor-pointer"
+                className="bg-transparent border-none focus:outline-none text-[13px] font-body font-medium cursor-pointer"
               >
                 {timeOptions.map((t) => (
                   <option key={t} value={t}>{t}</option>
@@ -192,14 +191,14 @@ export function DateTimePicker({
 
         {/* Timezone */}
         {!isAllDay && date && (
-          <div className="flex items-center gap-1 bg-muted/30 hover:bg-muted/50 px-3 py-2 rounded-full border border-transparent transition-colors">
-            <Globe className="w-4 h-4 text-muted-foreground" />
+          <div className="flex items-center gap-2 bg-primary/5 hover:bg-primary/10 px-4 py-2.5 rounded-full border border-primary/5 transition-all text-primary">
+            <Globe className="w-4 h-4 text-primary/60" />
             <select
               value={timezone || 'UTC'}
               onChange={(e) => {
                 onChange({ startDate, endDate, isAllDay, timezone: e.target.value, reminderAt });
               }}
-              className="bg-transparent border-none focus:outline-none text-sm cursor-pointer max-w-[100px] truncate"
+              className="bg-transparent border-none focus:outline-none text-[13px] font-body font-medium cursor-pointer max-w-[100px] truncate"
             >
               {timezones.map((tz) => (
                 <option key={tz} value={tz}>{tz}</option>
@@ -210,8 +209,8 @@ export function DateTimePicker({
 
         {/* Reminder */}
         {date && (
-          <div className="flex items-center gap-1 bg-muted/30 hover:bg-muted/50 px-3 py-2 rounded-full border border-transparent transition-colors">
-            <Bell className="w-4 h-4 text-muted-foreground" />
+          <div className="flex items-center gap-2 bg-primary/5 hover:bg-primary/10 px-4 py-2.5 rounded-full border border-primary/5 transition-all text-primary">
+            <Bell className="w-4 h-4 text-primary/60" />
             <select
               value={reminderOffset === null ? 'null' : reminderOffset.toString()}
               onChange={(e) => {
@@ -219,7 +218,7 @@ export function DateTimePicker({
                 setReminderOffset(val);
                 updateDates(date, startTime, endTime, isAllDay || false, val);
               }}
-              className="bg-transparent border-none focus:outline-none text-sm cursor-pointer max-w-[120px] truncate"
+              className="bg-transparent border-none focus:outline-none text-[13px] font-body font-medium cursor-pointer max-w-[140px] truncate"
             >
               {reminderOptions.map((opt) => (
                 <option key={opt.label} value={opt.value === null ? 'null' : opt.value.toString()}>
@@ -233,7 +232,7 @@ export function DateTimePicker({
 
       {/* All Day Toggle */}
       {date && (
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-3 px-2">
           <Checkbox.Root
             id="all-day"
             checked={isAllDay || false}
@@ -241,14 +240,14 @@ export function DateTimePicker({
               const isChecked = checked === true;
               updateDates(date, startTime, endTime, isChecked, reminderOffset);
             }}
-            className="flex h-4 w-4 items-center justify-center rounded border border-primary text-primary shadow focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+            className="flex h-5 w-5 items-center justify-center rounded-lg border border-primary/20 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all data-[state=checked]:bg-primary data-[state=checked]:border-primary data-[state=checked]:text-on-primary"
           >
             <Checkbox.Indicator>
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDown className="h-3.5 w-3.5" />
             </Checkbox.Indicator>
           </Checkbox.Root>
-          <Label.Root htmlFor="all-day" className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground">
-            All day
+          <Label.Root htmlFor="all-day" className="text-[13px] font-body font-medium leading-none cursor-pointer text-primary/60 hover:text-primary transition-colors">
+            All day event
           </Label.Root>
         </div>
       )}

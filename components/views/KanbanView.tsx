@@ -7,9 +7,9 @@ import { motion } from 'motion/react';
 import { MoreHorizontal, Plus, Circle, CheckCircle2 } from 'lucide-react';
 
 const COLUMNS: { id: 'todo' | 'in-progress' | 'done', title: string }[] = [
-  { id: 'todo', title: 'TO DO' },
-  { id: 'in-progress', title: 'IN PROGRESS' },
-  { id: 'done', title: 'DONE' },
+  { id: 'todo', title: 'To Do' },
+  { id: 'in-progress', title: 'In Progress' },
+  { id: 'done', title: 'Done' },
 ];
 
 export function KanbanView() {
@@ -26,35 +26,35 @@ export function KanbanView() {
   };
 
   return (
-    <div className="flex h-full gap-8 overflow-x-auto pb-8">
+    <div className="flex h-full gap-10 overflow-x-auto pb-12 hide-scrollbar">
       {COLUMNS.map((column) => {
         const columnTasks = tasks.filter(t => (t.status || 'todo') === column.id && !t.parentId);
         
         return (
-          <div key={column.id} className="flex-shrink-0 w-80 flex flex-col gap-6">
-            <div className="flex items-center justify-between px-2 border-b-2 border-outline-variant pb-2">
-              <div className="flex items-center gap-3">
-                <h3 className="font-headline font-black text-xl uppercase tracking-tighter text-on-surface">
+          <div key={column.id} className="flex-shrink-0 w-80 flex flex-col gap-8">
+            <div className="flex items-center justify-between px-4 pb-4 border-b border-outline-variant/20">
+              <div className="flex items-center gap-4">
+                <h3 className="font-headline font-medium text-2xl tracking-tight text-primary italic">
                   {column.title}
                 </h3>
-                <span className="bg-surface-container-high px-2 py-1 text-[10px] font-headline font-bold tracking-widest text-on-surface-variant">
+                <span className="bg-primary/5 px-2.5 py-0.5 rounded-full text-[9px] font-label font-bold tracking-[0.15em] text-primary/60">
                   {columnTasks.length}
                 </span>
               </div>
-              <button className="p-2 hover:bg-surface-container-high transition-colors text-on-surface-variant">
+              <button className="p-2 hover:bg-primary/5 rounded-full transition-colors text-outline/60">
                 <MoreHorizontal className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col gap-4 p-4 bg-surface-container-lowest border-l-4 border-tertiary-container min-h-[200px] shadow-sm">
+            <div className="flex-1 flex flex-col gap-5 p-4 bg-white/30 backdrop-blur-sm rounded-2xl border border-outline-variant/10 min-h-[400px] shadow-sm">
               {columnTasks.map((task) => (
                 <motion.div
                   layout
                   key={task.id}
                   onClick={() => setSelectedTaskId(task.id)}
                   className={cn(
-                    "group p-5 bg-surface border-l-4 shadow-sm hover:shadow-md transition-all cursor-pointer",
-                    task.isCompleted ? "border-primary bg-surface-container-low/50" : "border-transparent hover:border-outline-variant"
+                    "group p-5 bg-white rounded-xl shadow-sm border border-outline-variant/5 hover:shadow-md transition-all cursor-pointer",
+                    task.isCompleted && "opacity-60 grayscale-[0.5]"
                   )}
                 >
                   <div className="flex flex-col gap-4">
@@ -66,15 +66,15 @@ export function KanbanView() {
                           handleStatusChange(task.id, nextStatus as any);
                         }}
                         className={cn(
-                          "mt-0.5 w-5 h-5 border-2 flex items-center justify-center transition-colors shrink-0",
-                          task.isCompleted ? "bg-primary border-primary text-on-primary-fixed" : "border-outline hover:border-primary"
+                          "mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center transition-all shrink-0",
+                          task.isCompleted ? "bg-primary border-primary text-on-primary" : "border-outline-variant hover:border-primary"
                         )}
                       >
-                        {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5" />}
+                        {task.isCompleted && <CheckCircle2 className="w-3 h-3" />}
                       </button>
                       <span className={cn(
-                        "text-sm font-medium leading-tight",
-                        task.isCompleted ? "line-through text-outline" : "text-on-surface"
+                        "text-[14px] font-body font-medium leading-relaxed",
+                        task.isCompleted ? "line-through text-outline" : "text-primary"
                       )}>
                         {task.title}
                       </span>
@@ -83,19 +83,19 @@ export function KanbanView() {
                     {task.priority && task.priority > 0 && (
                       <div className="flex items-center gap-2 pl-9">
                         <span className={cn(
-                          "text-[9px] px-2 py-1 font-headline font-bold uppercase tracking-widest",
-                          task.priority === 3 ? "bg-error-container text-error" :
-                          task.priority === 2 ? "bg-warning-container text-warning" :
-                          "bg-info-container text-info"
+                          "text-[8px] px-2.5 py-1 rounded-full font-label font-bold uppercase tracking-[0.2em]",
+                          task.priority === 3 ? "bg-error/10 text-error" :
+                          task.priority === 2 ? "bg-warning/10 text-warning" :
+                          "bg-info/10 text-info"
                         )}>
-                          {task.priority === 3 ? 'HIGH' : task.priority === 2 ? 'MEDIUM' : 'LOW'}
+                          {task.priority === 3 ? 'High' : task.priority === 2 ? 'Medium' : 'Low'}
                         </span>
                       </div>
                     )}
 
                     <div className="flex items-center justify-between mt-2 pl-9">
                       <div className="flex -space-x-2">
-                        <div className="w-6 h-6 bg-primary text-on-primary-fixed flex items-center justify-center text-[10px] font-headline font-bold uppercase">
+                        <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 text-primary flex items-center justify-center text-[9px] font-label font-bold uppercase">
                           {task.title[0]}
                         </div>
                       </div>
@@ -104,7 +104,7 @@ export function KanbanView() {
                           value={task.status || 'todo'}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => handleStatusChange(task.id, e.target.value as any)}
-                          className="text-[9px] font-headline font-bold tracking-widest uppercase bg-surface-container-high border-none px-2 py-1 focus:ring-0 text-on-surface-variant cursor-pointer"
+                          className="text-[8px] font-label font-bold tracking-[0.15em] uppercase bg-primary/5 border-none rounded-lg px-2.5 py-1.5 focus:ring-0 text-primary/60 cursor-pointer"
                         >
                           {COLUMNS.map(c => (
                             <option key={c.id} value={c.id}>{c.title}</option>
@@ -115,11 +115,6 @@ export function KanbanView() {
                   </div>
                 </motion.div>
               ))}
-              
-              <button className="flex items-center gap-3 p-4 text-xs font-headline font-bold tracking-widest uppercase text-outline hover:text-primary hover:bg-surface-container-high transition-all border-2 border-dashed border-outline-variant mt-auto">
-                <Plus className="w-4 h-4" />
-                ADD TASK
-              </button>
             </div>
           </div>
         );
