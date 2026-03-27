@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { format, setHours, setMinutes, startOfDay, endOfDay } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, Globe, ChevronDown } from 'lucide-react';
+import { format, setHours, setMinutes, startOfDay, endOfDay, subMinutes, subHours, subDays } from 'date-fns';
+import { Calendar as CalendarIcon, Clock, Globe, ChevronDown, Bell } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import * as Popover from '@radix-ui/react-popover';
 import * as Select from '@radix-ui/react-select';
@@ -15,11 +15,13 @@ interface DateTimePickerProps {
   endDate: Date | null;
   isAllDay: boolean | null;
   timezone: string | null;
+  reminderAt: Date | null;
   onChange: (updates: {
     startDate: Date | null;
     endDate: Date | null;
     isAllDay: boolean | null;
     timezone: string | null;
+    reminderAt: Date | null;
   }) => void;
 }
 
@@ -28,11 +30,19 @@ export function DateTimePicker({
   endDate,
   isAllDay,
   timezone,
+  reminderAt,
   onChange,
 }: DateTimePickerProps) {
   const [date, setDate] = React.useState<Date | undefined>(startDate || undefined);
   const [startTime, setStartTime] = React.useState(startDate ? format(startDate, 'HH:mm') : '09:00');
   const [endTime, setEndTime] = React.useState(endDate ? format(endDate, 'HH:mm') : '10:00');
+
+  const [reminderOffset, setReminderOffset] = React.useState<number | null>(() => {
+    if (startDate && reminderAt) {
+      return Math.round((startDate.getTime() - reminderAt.getTime()) / 60000);
+    }
+    return null;
+  });
 
   const timeOptions = Array.from({ length: 48 }).map((_, i) => {
     const hour = Math.floor(i / 2);
@@ -52,22 +62,36 @@ export function DateTimePicker({
     'Asia/Dubai',
   ];
 
+  const reminderOptions = [
+    { label: 'None', value: null },
+    { label: 'At time of event', value: 0 },
+    { label: '5 minutes before', value: 5 },
+    { label: '10 minutes before', value: 10 },
+    { label: '15 minutes before', value: 15 },
+    { label: '30 minutes before', value: 30 },
+    { label: '1 hour before', value: 60 },
+    { label: '2 hours before', value: 120 },
+    { label: '1 day before', value: 1440 },
+  ];
+
   const handleDateSelect = (newDate: Date | undefined) => {
     setDate(newDate);
     if (newDate) {
-      updateDates(newDate, startTime, endTime, isAllDay || false);
+      updateDates(newDate, startTime, endTime, isAllDay || false, reminderOffset);
     } else {
-      onChange({ startDate: null, endDate: null, isAllDay: null, timezone: null });
+      onChange({ startDate: null, endDate: null, isAllDay: null, timezone: null, reminderAt: null });
     }
   };
 
-  const updateDates = (baseDate: Date, start: string, end: string, allDay: boolean) => {
+  const updateDates = (baseDate: Date, start: string, end: string, allDay: boolean, offset: number | null) => {
     if (allDay) {
+      const newStartDate = startOfDay(baseDate);
       onChange({
-        startDate: startOfDay(baseDate),
+        startDate: newStartDate,
         endDate: endOfDay(baseDate),
         isAllDay: true,
         timezone: timezone,
+        reminderAt: offset !== null ? subMinutes(newStartDate, offset) : null,
       });
       return;
     }
@@ -83,6 +107,7 @@ export function DateTimePicker({
       endDate: newEndDate,
       isAllDay: false,
       timezone: timezone,
+      reminderAt: offset !== null ? subMinutes(newStartDate, offset) : null,
     });
   };
 
@@ -140,7 +165,7 @@ export function DateTimePicker({
                 value={startTime}
                 onChange={(e) => {
                   setStartTime(e.target.value);
-                  updateDates(date, e.target.value, endTime, false);
+                  updateDates(date, e.target.value, endTime, false, reminderOffset);
                 }}
                 className="bg-transparent border-none focus:outline-none text-sm cursor-pointer"
               >
@@ -153,7 +178,7 @@ export function DateTimePicker({
                 value={endTime}
                 onChange={(e) => {
                   setEndTime(e.target.value);
-                  updateDates(date, startTime, e.target.value, false);
+                  updateDates(date, startTime, e.target.value, false, reminderOffset);
                 }}
                 className="bg-transparent border-none focus:outline-none text-sm cursor-pointer"
               >
@@ -172,12 +197,34 @@ export function DateTimePicker({
             <select
               value={timezone || 'UTC'}
               onChange={(e) => {
-                onChange({ startDate, endDate, isAllDay, timezone: e.target.value });
+                onChange({ startDate, endDate, isAllDay, timezone: e.target.value, reminderAt });
               }}
               className="bg-transparent border-none focus:outline-none text-sm cursor-pointer max-w-[100px] truncate"
             >
               {timezones.map((tz) => (
                 <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Reminder */}
+        {date && (
+          <div className="flex items-center gap-1 bg-muted/30 hover:bg-muted/50 px-3 py-2 rounded-full border border-transparent transition-colors">
+            <Bell className="w-4 h-4 text-muted-foreground" />
+            <select
+              value={reminderOffset === null ? 'null' : reminderOffset.toString()}
+              onChange={(e) => {
+                const val = e.target.value === 'null' ? null : parseInt(e.target.value, 10);
+                setReminderOffset(val);
+                updateDates(date, startTime, endTime, isAllDay || false, val);
+              }}
+              className="bg-transparent border-none focus:outline-none text-sm cursor-pointer max-w-[120px] truncate"
+            >
+              {reminderOptions.map((opt) => (
+                <option key={opt.label} value={opt.value === null ? 'null' : opt.value.toString()}>
+                  {opt.label}
+                </option>
               ))}
             </select>
           </div>
@@ -192,7 +239,7 @@ export function DateTimePicker({
             checked={isAllDay || false}
             onCheckedChange={(checked) => {
               const isChecked = checked === true;
-              updateDates(date, startTime, endTime, isChecked);
+              updateDates(date, startTime, endTime, isChecked, reminderOffset);
             }}
             className="flex h-4 w-4 items-center justify-center rounded border border-primary text-primary shadow focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
           >

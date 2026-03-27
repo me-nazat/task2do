@@ -1,19 +1,50 @@
 'use client';
 
 import { useStore, Task } from '@/store/useStore';
-import { updateTask } from '@/actions/task';
+import { createTask, updateTask } from '@/actions/task';
 import { cn } from '@/lib/utils';
-import { Circle, CheckCircle2 } from 'lucide-react';
+import { Circle, CheckCircle2, Plus } from 'lucide-react';
+import { useCallback } from 'react';
 
 const quadrants = [
-  { id: 'urgent-important', title: 'Urgent & Important', color: 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400' },
-  { id: 'not-urgent-important', title: 'Not Urgent & Important', color: 'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400' },
-  { id: 'urgent-not-important', title: 'Urgent & Not Important', color: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-700 dark:text-yellow-400' },
-  { id: 'not-urgent-not-important', title: 'Not Urgent & Not Important', color: 'bg-gray-500/10 border-gray-500/20 text-gray-700 dark:text-gray-400' },
+  { id: 'urgent-important', title: 'URGENT & IMPORTANT', color: 'bg-error-container/20 border-error text-error' },
+  { id: 'not-urgent-important', title: 'NOT URGENT & IMPORTANT', color: 'bg-info-container/20 border-info text-info' },
+  { id: 'urgent-not-important', title: 'URGENT & NOT IMPORTANT', color: 'bg-warning-container/20 border-warning text-warning' },
+  { id: 'not-urgent-not-important', title: 'NOT URGENT & NOT IMPORTANT', color: 'bg-surface-container-high border-outline text-on-surface-variant' },
 ];
 
 export function MatrixView() {
-  const { tasks, setSelectedTaskId, updateTask: updateTaskState } = useStore();
+  const { tasks, setSelectedTaskId, updateTask: updateTaskState, addTask, selectedListId } = useStore();
+
+  const handleAddTask = useCallback(async (quadrantId: string) => {
+    const title = prompt('Enter task title:');
+    if (title) {
+      const tempId = `temp-${Date.now()}`;
+      const newTask = {
+        id: tempId,
+        title,
+        isCompleted: false,
+        priority: 0,
+        startDate: null,
+        endDate: null,
+        isAllDay: false,
+        listId: selectedListId,
+        description: null,
+        quadrant: quadrantId,
+        parentId: null,
+        timezone: null,
+        reminderAt: null,
+        status: 'todo' as const,
+      };
+      addTask(newTask);
+      try {
+        const id = await createTask({ title, listId: selectedListId || undefined, quadrant: quadrantId });
+        updateTaskState(tempId, { id });
+      } catch (error) {
+        console.error('Failed to create task', error);
+      }
+    }
+  }, [addTask, selectedListId, updateTaskState]);
 
   const handleDrop = async (e: React.DragEvent, quadrantId: string) => {
     e.preventDefault();
@@ -43,7 +74,7 @@ export function MatrixView() {
   };
 
   return (
-    <div className="grid grid-cols-2 grid-rows-2 gap-4 h-full min-h-[600px]">
+    <div className="grid grid-cols-2 grid-rows-2 gap-6 h-full min-h-[600px]">
       {quadrants.map((quadrant) => {
         const quadrantTasks = tasks.filter(t => t.quadrant === quadrant.id && !t.parentId);
         
@@ -52,10 +83,10 @@ export function MatrixView() {
             key={quadrant.id}
             onDrop={(e) => handleDrop(e, quadrant.id)}
             onDragOver={handleDragOver}
-            className={cn("rounded-3xl border-2 p-5 flex flex-col transition-colors", quadrant.color)}
+            className={cn("border-l-4 p-6 flex flex-col transition-colors shadow-sm", quadrant.color)}
           >
-            <h3 className="font-semibold mb-4 text-[15px] tracking-tight">{quadrant.title}</h3>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <h3 className="font-headline font-black text-lg tracking-tighter uppercase mb-6">{quadrant.title}</h3>
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
               {quadrantTasks.map(task => (
                 <div 
                   key={task.id}
@@ -63,8 +94,8 @@ export function MatrixView() {
                   onDragStart={(e) => handleDragStart(e, task.id)}
                   onClick={() => setSelectedTaskId(task.id)}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-xl bg-background border border-border/40 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-border/60 transition-all",
-                    task.isCompleted && "opacity-60 bg-muted/10"
+                    "flex items-center gap-4 p-4 bg-surface border-l-4 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-all",
+                    task.isCompleted ? "border-primary bg-surface-container-low/50" : "border-transparent hover:border-outline-variant"
                   )}
                 >
                   <button 
@@ -72,25 +103,31 @@ export function MatrixView() {
                       e.stopPropagation();
                       handleToggleComplete(task.id, task.isCompleted);
                     }}
-                    className="text-muted-foreground hover:text-primary transition-colors shrink-0"
-                  >
-                    {task.isCompleted ? (
-                      <CheckCircle2 className="w-5 h-5 text-primary" />
-                    ) : (
-                      <Circle className="w-5 h-5" />
+                    className={cn(
+                      "w-5 h-5 border-2 flex items-center justify-center transition-colors shrink-0",
+                      task.isCompleted ? "bg-primary border-primary text-on-primary-fixed" : "border-outline hover:border-primary"
                     )}
+                  >
+                    {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5" />}
                   </button>
-                  <span className={cn("text-[15px] truncate text-foreground", task.isCompleted && "line-through text-muted-foreground")}>
+                  <span className={cn("text-sm font-medium truncate", task.isCompleted ? "line-through text-outline" : "text-on-surface")}>
                     {task.title}
                   </span>
                 </div>
               ))}
               {quadrantTasks.length === 0 && (
-                <div className="text-sm text-muted-foreground/50 text-center py-8 border-2 border-dashed border-muted-foreground/20 rounded-xl">
-                  Drag tasks here
+                <div className="text-xs font-headline font-bold tracking-widest uppercase text-outline text-center py-12 border-2 border-dashed border-outline-variant">
+                  DRAG TASKS HERE
                 </div>
               )}
             </div>
+            <button 
+              onClick={() => handleAddTask(quadrant.id)}
+              className="mt-6 flex items-center gap-3 text-xs font-headline font-bold tracking-widest uppercase text-outline hover:text-primary transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              ADD TASK
+            </button>
           </div>
         );
       })}

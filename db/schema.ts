@@ -28,6 +28,8 @@ export const tasks = sqliteTable('tasks', {
   endDate: integer('end_date', { mode: 'timestamp' }),
   isAllDay: integer('is_all_day', { mode: 'boolean' }).default(false),
   timezone: text('timezone'),
+  reminderAt: integer('reminder_at', { mode: 'timestamp' }),
+  status: text('status').default('todo'), // 'todo', 'in-progress', 'done'
   quadrant: text('quadrant'), // 'urgent-important', 'not-urgent-important', 'urgent-not-important', 'not-urgent-not-important'
   parentId: text('parent_id'), // Self-referencing for subtasks
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),

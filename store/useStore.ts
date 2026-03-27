@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ViewType = 'list' | 'calendar' | 'matrix' | 'kanban' | 'habits';
+export type ViewType = 'list' | 'calendar' | 'matrix' | 'kanban' | 'habits' | 'today' | 'upcoming';
 
 export interface Task {
   id: string;
@@ -15,6 +15,14 @@ export interface Task {
   quadrant: string | null;
   parentId: string | null;
   timezone: string | null;
+  reminderAt: Date | null;
+  status: 'todo' | 'in-progress' | 'done' | null;
+}
+
+export interface List {
+  id: string;
+  name: string;
+  color: string | null;
 }
 
 interface AppState {
@@ -25,6 +33,7 @@ interface AppState {
   isRightPaneOpen: boolean;
   searchQuery: string;
   tasks: Task[];
+  lists: List[];
   
   setCurrentView: (view: ViewType) => void;
   setSelectedListId: (id: string | null) => void;
@@ -33,7 +42,9 @@ interface AppState {
   toggleRightPane: () => void;
   setSearchQuery: (query: string) => void;
   setTasks: (tasks: Task[]) => void;
+  setLists: (lists: List[]) => void;
   addTask: (task: Task) => void;
+  addList: (list: List) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
 }
@@ -46,6 +57,7 @@ export const useStore = create<AppState>((set) => ({
   isRightPaneOpen: false,
   searchQuery: '',
   tasks: [],
+  lists: [],
 
   setCurrentView: (view) => set({ currentView: view }),
   setSelectedListId: (id) => set({ selectedListId: id }),
@@ -54,7 +66,9 @@ export const useStore = create<AppState>((set) => ({
   toggleRightPane: () => set((state) => ({ isRightPaneOpen: !state.isRightPaneOpen })),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setTasks: (tasks) => set({ tasks }),
+  setLists: (lists) => set({ lists }),
   addTask: (task) => set((state) => ({ tasks: [...state.tasks, task] })),
+  addList: (list) => set((state) => ({ lists: [...state.lists, list] })),
   updateTask: (id, updates) => set((state) => ({
     tasks: state.tasks.map(t => t.id === id ? { ...t, ...updates } : t)
   })),

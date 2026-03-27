@@ -1,11 +1,12 @@
 'use client';
 
 import { useStore } from '@/store/useStore';
-import { X, Calendar as CalendarIcon, Flag, Tag, AlignLeft, CheckSquare, Trash2, Plus, Circle } from 'lucide-react';
+import { X, Calendar as CalendarIcon, Flag, Tag, AlignLeft, CheckSquare, Trash2, Plus, Circle, CheckCircle2, LayoutDashboard } from 'lucide-react';
 import { updateTask, deleteTask, createTask } from '@/actions/task';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
+import { RichTextEditor } from '@/components/ui/RichTextEditor';
 
 export function RightPane() {
   const { selectedTaskId, setSelectedTaskId, tasks, updateTask: updateTaskState, deleteTask: deleteTaskState } = useStore();
@@ -37,6 +38,8 @@ export function RightPane() {
       quadrant: null,
       parentId: task.id,
       timezone: null,
+      reminderAt: null,
+      status: 'todo' as const,
     };
 
     useStore.getState().addTask(newSubtask);
@@ -86,24 +89,24 @@ export function RightPane() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card">
+    <div className="flex flex-col h-full bg-surface-container-low">
       {/* Header */}
-      <div className="h-16 border-b border-border/40 flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+      <div className="h-16 border-b-2 border-transparent flex items-center justify-between px-8 shrink-0">
+        <div className="flex items-center gap-2 text-xs font-headline font-bold tracking-widest uppercase text-on-surface-variant">
           <CheckSquare className="w-4 h-4" />
           <span>Task Details</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-4">
           <button 
             onClick={handleDelete}
-            className="p-2 hover:bg-destructive/10 hover:text-destructive rounded-full text-muted-foreground transition-colors"
+            className="p-2 hover:bg-error-container hover:text-error rounded-none text-on-surface-variant transition-colors"
             title="Delete Task"
           >
             <Trash2 className="w-4 h-4" />
           </button>
           <button 
             onClick={() => setSelectedTaskId(null)}
-            className="p-2 hover:bg-muted/50 rounded-full text-muted-foreground transition-colors"
+            className="p-2 hover:bg-surface-container-high rounded-none text-on-surface-variant transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -111,7 +114,7 @@ export function RightPane() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-8">
+      <div className="flex-1 overflow-y-auto p-8 space-y-12">
         {/* Title */}
         <div>
           <input 
@@ -119,15 +122,15 @@ export function RightPane() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={handleTitleBlur}
-            className="w-full text-2xl font-semibold bg-transparent border-none focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50 font-heading tracking-tight"
-            placeholder="Task Title"
+            className="w-full text-3xl font-black bg-transparent border-none focus:outline-none focus:ring-0 placeholder:text-outline font-headline tracking-tighter uppercase"
+            placeholder="TASK TITLE"
           />
         </div>
 
         {/* Properties */}
-        <div className="space-y-4 bg-muted/20 p-4 rounded-2xl border border-border/30">
+        <div className="space-y-6 bg-surface-container-lowest p-6 border-l-4 border-tertiary-container shadow-sm">
           <div className="flex items-start gap-4 text-sm">
-            <div className="w-24 text-muted-foreground flex items-center gap-2 pt-1.5 font-medium">
+            <div className="w-24 text-on-surface-variant flex items-center gap-2 pt-1.5 font-headline font-bold text-xs tracking-widest uppercase">
               <CalendarIcon className="w-4 h-4" /> Date
             </div>
             <div className="flex-1">
@@ -136,6 +139,7 @@ export function RightPane() {
                 endDate={task.endDate ? new Date(task.endDate) : null}
                 isAllDay={task.isAllDay}
                 timezone={task.timezone}
+                reminderAt={task.reminderAt ? new Date(task.reminderAt) : null}
                 onChange={async (updates) => {
                   updateTaskState(task.id, updates);
                   await updateTask(task.id, updates);
@@ -145,15 +149,37 @@ export function RightPane() {
           </div>
 
           <div className="flex items-center gap-4 text-sm">
-            <div className="w-24 text-muted-foreground flex items-center gap-2 font-medium">
+            <div className="w-24 text-on-surface-variant flex items-center gap-2 font-headline font-bold text-xs tracking-widest uppercase">
+              <CheckCircle2 className="w-4 h-4" /> Status
+            </div>
+            <div className="flex-1">
+              <select
+                value={task.status || 'todo'}
+                onChange={async (e) => {
+                  const status = e.target.value as any;
+                  const isCompleted = status === 'done';
+                  updateTaskState(task.id, { status, isCompleted });
+                  await updateTask(task.id, { status, isCompleted });
+                }}
+                className="bg-surface-container-high hover:bg-surface-container-highest px-4 py-2 border-none transition-colors text-xs font-headline font-bold tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="todo">To Do</option>
+                <option value="in-progress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-sm">
+            <div className="w-24 text-on-surface-variant flex items-center gap-2 font-headline font-bold text-xs tracking-widest uppercase">
               <Flag className="w-4 h-4" /> Priority
             </div>
             <div className="flex-1 flex items-center gap-2">
               {[
-                { value: 0, label: 'None', color: 'text-gray-400' },
-                { value: 1, label: 'Low', color: 'text-blue-500' },
-                { value: 2, label: 'Medium', color: 'text-yellow-500' },
-                { value: 3, label: 'High', color: 'text-red-500' },
+                { value: 0, label: 'None', color: 'text-outline' },
+                { value: 1, label: 'Low', color: 'text-info' },
+                { value: 2, label: 'Medium', color: 'text-warning' },
+                { value: 3, label: 'High', color: 'text-error' },
               ].map((p) => (
                 <button
                   key={p.value}
@@ -162,8 +188,8 @@ export function RightPane() {
                     await updateTask(task.id, { priority: p.value });
                   }}
                   className={cn(
-                    "p-2 rounded-full transition-colors hover:bg-muted/50",
-                    task.priority === p.value ? "bg-muted/80 shadow-sm" : ""
+                    "p-2 transition-colors hover:bg-surface-container-high",
+                    task.priority === p.value ? "bg-surface-container-highest shadow-sm" : ""
                   )}
                   title={p.label}
                 >
@@ -174,36 +200,59 @@ export function RightPane() {
           </div>
 
           <div className="flex items-center gap-4 text-sm">
-            <div className="w-24 text-muted-foreground flex items-center gap-2 font-medium">
+            <div className="w-24 text-on-surface-variant flex items-center gap-2 font-headline font-bold text-xs tracking-widest uppercase">
+              <LayoutDashboard className="w-4 h-4" /> Quadrant
+            </div>
+            <div className="flex-1">
+              <select
+                value={task.quadrant || 'none'}
+                onChange={async (e) => {
+                  const quadrant = e.target.value === 'none' ? null : e.target.value;
+                  updateTaskState(task.id, { quadrant });
+                  await updateTask(task.id, { quadrant });
+                }}
+                className="bg-surface-container-high hover:bg-surface-container-highest px-4 py-2 border-none transition-colors text-xs font-headline font-bold tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="none">None</option>
+                <option value="urgent-important">Urgent & Important</option>
+                <option value="not-urgent-important">Not Urgent & Important</option>
+                <option value="urgent-not-important">Urgent & Not Important</option>
+                <option value="not-urgent-not-important">Not Urgent & Not Important</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-sm">
+            <div className="w-24 text-on-surface-variant flex items-center gap-2 font-headline font-bold text-xs tracking-widest uppercase">
               <Tag className="w-4 h-4" /> Tags
             </div>
-            <div className="flex-1 px-3 py-2 hover:bg-muted/50 rounded-xl cursor-pointer transition-colors text-muted-foreground">
-              Add tags...
+            <div className="flex-1 px-4 py-2 hover:bg-surface-container-high cursor-pointer transition-colors text-outline font-headline font-bold text-xs tracking-widest uppercase">
+              ADD TAGS...
             </div>
           </div>
         </div>
 
         {/* Subtasks */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-xs font-headline font-bold tracking-widest uppercase text-on-surface-variant">
             <CheckSquare className="w-4 h-4" /> Subtasks
           </div>
           
-          <div className="space-y-1">
+          <div className="space-y-2">
             {subtasks.map((subtask) => (
-              <div key={subtask.id} className="flex items-center gap-3 group px-3 py-2 hover:bg-muted/30 rounded-xl transition-colors">
+              <div key={subtask.id} className="flex items-center gap-4 group px-4 py-3 bg-surface-container-lowest hover:bg-surface-container-high transition-colors border-l-2 border-tertiary-container">
                 <button 
                   onClick={() => handleToggleSubtask(subtask.id, subtask.isCompleted)}
                   className={cn(
-                    "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
-                    subtask.isCompleted ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30 hover:border-primary"
+                    "w-5 h-5 border-2 flex items-center justify-center transition-colors",
+                    subtask.isCompleted ? "bg-primary border-primary text-on-primary-fixed" : "border-outline hover:border-primary"
                   )}
                 >
                   {subtask.isCompleted && <CheckSquare className="w-3.5 h-3.5" />}
                 </button>
                 <span className={cn(
-                  "text-[15px] transition-all",
-                  subtask.isCompleted ? "text-muted-foreground line-through" : "text-foreground"
+                  "text-sm font-medium transition-all",
+                  subtask.isCompleted ? "text-outline line-through" : "text-on-surface"
                 )}>
                   {subtask.title}
                 </span>
@@ -212,7 +261,7 @@ export function RightPane() {
                     useStore.getState().deleteTask(subtask.id);
                     await deleteTask(subtask.id);
                   }}
-                  className="ml-auto opacity-0 group-hover:opacity-100 p-1.5 hover:bg-destructive/10 rounded-full hover:text-destructive transition-all"
+                  className="ml-auto opacity-0 group-hover:opacity-100 p-2 hover:bg-error-container text-on-surface-variant hover:text-error transition-all"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -220,37 +269,37 @@ export function RightPane() {
             ))}
           </div>
 
-          <form onSubmit={handleAddSubtask} className="flex items-center gap-3 px-3 py-1">
-            <Plus className="w-5 h-5 text-muted-foreground" />
+          <form onSubmit={handleAddSubtask} className="flex items-center gap-4 px-4 py-2 bg-surface-container-lowest border-l-2 border-transparent focus-within:border-primary transition-colors">
+            <Plus className="w-5 h-5 text-outline" />
             <input 
               type="text"
               value={newSubtaskTitle}
               onChange={(e) => setNewSubtaskTitle(e.target.value)}
-              placeholder="Add subtask"
-              className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-[15px] placeholder:text-muted-foreground/50"
+              placeholder="ADD SUBTASK..."
+              className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm font-headline font-bold tracking-widest uppercase placeholder:text-outline"
             />
           </form>
         </div>
 
         {/* Description */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-xs font-headline font-bold tracking-widest uppercase text-on-surface-variant">
             <AlignLeft className="w-4 h-4" /> Description
           </div>
-          <textarea 
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={handleDescriptionBlur}
-            className="w-full min-h-[180px] p-5 rounded-2xl border border-border/40 bg-muted/10 hover:bg-muted/20 focus:bg-background focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all duration-300 resize-y text-[15px] leading-relaxed placeholder:text-muted-foreground/40 text-foreground/90"
-            placeholder="Add notes or description..."
-          />
+          <div className="bg-surface-container-lowest p-4 border-l-4 border-tertiary-container">
+            <RichTextEditor 
+              content={description}
+              onChange={setDescription}
+              onBlur={handleDescriptionBlur}
+            />
+          </div>
         </div>
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 border-t border-border/40 flex items-center justify-between shrink-0">
-        <span className="text-xs text-muted-foreground font-medium">
-          Created {task.id.startsWith('temp') ? 'just now' : 'recently'}
+      <div className="p-6 border-t-2 border-transparent flex items-center justify-between shrink-0 bg-surface-container-low">
+        <span className="text-[10px] font-headline font-bold tracking-[0.2em] uppercase text-outline">
+          CREATED {task.id.startsWith('temp') ? 'JUST NOW' : 'RECENTLY'}
         </span>
       </div>
     </div>
