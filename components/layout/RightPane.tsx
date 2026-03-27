@@ -40,7 +40,7 @@ export function RightPane() {
       timezone: null,
       reminderAt: null,
       status: 'todo' as const,
-      userId: user.uid,
+      userId: user.id,
     };
 
     useStore.getState().addTask(newSubtask);
@@ -51,7 +51,7 @@ export function RightPane() {
         title: newSubtaskTitle,
         listId: task.listId || undefined,
         parentId: task.id,
-        userId: user.uid,
+        userId: user.id,
       });
       useStore.getState().updateTask(tempId, { id: realId });
     } catch (error) {

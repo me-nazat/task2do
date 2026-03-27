@@ -35,7 +35,7 @@ export function HabitTrackerView() {
   useEffect(() => {
     const fetchHabits = async () => {
       if (user) {
-        const data = await getHabits(user.uid);
+        const data = await getHabits(user.id);
         setHabits(data);
       }
       setLoading(false);
@@ -66,7 +66,7 @@ export function HabitTrackerView() {
     }));
 
     await toggleHabitLog(habitId, date, 'completed');
-    const data = await getHabits(user.uid);
+    const data = await getHabits(user.id);
     setHabits(data);
   };
 
@@ -74,8 +74,8 @@ export function HabitTrackerView() {
     e.preventDefault();
     if (!user || !newHabitName.trim()) return;
     
-    await createHabit({ name: newHabitName.trim(), frequency: 'daily', userId: user.uid });
-    const data = await getHabits(user.uid);
+    await createHabit({ name: newHabitName.trim(), frequency: 'daily', userId: user.id });
+    const data = await getHabits(user.id);
     setHabits(data);
     setNewHabitName('');
     setIsAddHabitModalOpen(false);

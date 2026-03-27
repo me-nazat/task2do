@@ -42,13 +42,13 @@ export function MatrixView() {
       timezone: null,
       reminderAt: null,
       status: 'todo' as const,
-      userId: user.uid,
+      userId: user.id,
     };
     addTask(newTask);
     setNewTaskTitle('');
     setIsAddTaskModalOpen(false);
     try {
-      const id = await createTask({ title, listId: selectedListId || undefined, quadrant: quadrantId, userId: user.uid });
+      const id = await createTask({ title, listId: selectedListId || undefined, quadrant: quadrantId, userId: user.id });
       updateTaskState(tempId, { id });
     } catch (error) {
       console.error('Failed to create task', error);

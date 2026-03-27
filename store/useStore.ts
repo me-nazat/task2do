@@ -21,8 +21,11 @@ export interface Task {
 
 export interface List {
   id: string;
+  userId: string;
   name: string;
   color: string | null;
+  isDefault: boolean | null;
+  createdAt: Date;
 }
 
 interface AppState {

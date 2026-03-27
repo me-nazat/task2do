@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   const { email, password } = await req.json();
-  const lowerEmail = email.toLowerCase();
+  const lowerEmail = email.trim().toLowerCase();
 
   try {
     const result = await client.execute({

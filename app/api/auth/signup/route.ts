@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: Request) {
   const { name, email, password } = await req.json();
-  const lowerEmail = email.toLowerCase();
+  const lowerEmail = email.trim().toLowerCase();
   const userId = uuidv4();
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -22,10 +22,14 @@ export async function POST(req: Request) {
     // Attempt to add columns if they don't exist
     try {
       await client.execute({ sql: 'ALTER TABLE users ADD COLUMN password TEXT', args: [] });
-    } catch (err: any) {}
+    } catch (err: any) {
+      console.error('Failed to add password column:', err);
+    }
     try {
       await client.execute({ sql: 'ALTER TABLE users ADD COLUMN created_at INTEGER', args: [] });
-    } catch (err: any) {}
+    } catch (err: any) {
+      console.error('Failed to add created_at column:', err);
+    }
 
     await client.execute({
       sql: 'INSERT INTO users (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)',
