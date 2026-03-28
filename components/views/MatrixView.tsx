@@ -17,8 +17,21 @@ const quadrants = [
 export function MatrixView() {
   const { tasks, setSelectedTaskId, updateTask: updateTaskState, addTask, selectedListId, user } = useStore();
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [activeQuadrant, setActiveQuadrant] = useState<string | null>(null);
+
+  const handleImportTask = async (taskId: string) => {
+    if (!activeQuadrant) return;
+    updateTaskState(taskId, { quadrant: activeQuadrant });
+    setIsAddTaskModalOpen(false);
+    setIsImporting(false);
+    try {
+      await updateTask(taskId, { quadrant: activeQuadrant });
+    } catch (error) {
+      console.error('Failed to import task to matrix', error);
+    }
+  };
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,28 +124,69 @@ export function MatrixView() {
 
             <Modal 
               isOpen={isAddTaskModalOpen} 
-              onClose={() => setIsAddTaskModalOpen(false)}
-              title="New Task"
+              onClose={() => {
+                setIsAddTaskModalOpen(false);
+                setTimeout(() => setIsImporting(false), 200);
+              }}
+              title={isImporting ? "Import Existing Task" : "New Task"}
             >
-              <form onSubmit={handleAddTask} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-label font-bold tracking-[0.2em] uppercase text-outline/60">Task Title</label>
-                  <input 
-                    autoFocus
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="e.g. Finish quarterly report"
-                    className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl px-5 py-4 font-body text-lg focus:ring-2 focus:ring-primary/20 transition-all"
-                  />
+              {isImporting ? (
+                <div className="space-y-4">
+                  <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2 hide-scrollbar">
+                    {(() => {
+                      const availableTasks = tasks.filter(t => !t.quadrant && !t.isCompleted && !t.parentId);
+                      if (availableTasks.length === 0) {
+                        return <div className="text-center py-8 text-outline text-sm italic font-body">No pending unassigned tasks available in your Inbox</div>;
+                      }
+                      return availableTasks.map(task => (
+                        <div 
+                          key={task.id}
+                          onClick={() => handleImportTask(task.id)}
+                          className="p-4 bg-surface-container border border-outline-variant/10 hover:border-primary/30 hover:shadow-sm rounded-xl cursor-pointer transition-all flex items-center justify-between group"
+                        >
+                          <span className="text-sm font-body font-medium text-primary truncate flex-1">{task.title}</span>
+                          <Plus className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                  <button 
+                    onClick={() => setIsImporting(false)}
+                    className="w-full bg-surface-container py-3 rounded-xl font-label font-bold tracking-[0.2em] uppercase hover:bg-surface-container-high transition-all text-outline mt-2"
+                  >
+                    Back to Create New
+                  </button>
                 </div>
-                <button 
-                  type="submit"
-                  className="w-full bg-primary text-on-primary py-4 rounded-xl font-label font-bold tracking-[0.2em] uppercase hover:bg-primary/90 transition-all shadow-md"
-                >
-                  Create Task
-                </button>
-              </form>
+              ) : (
+                <form onSubmit={handleAddTask} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-label font-bold tracking-[0.2em] uppercase text-outline/60">Task Title</label>
+                    <input 
+                      autoFocus
+                      type="text"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      placeholder="e.g. Finish quarterly report"
+                      className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl px-5 py-4 font-body text-lg focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => setIsImporting(true)}
+                      className="flex-1 bg-surface-container py-4 rounded-xl font-label font-bold tracking-[0.1em] uppercase hover:bg-surface-container-high transition-all text-outline"
+                    >
+                      Import Existing
+                    </button>
+                    <button 
+                      type="submit"
+                      className="flex-[2] bg-primary text-on-primary py-4 rounded-xl font-label font-bold tracking-[0.15em] uppercase hover:bg-primary/90 transition-all shadow-md"
+                    >
+                      Create Task
+                    </button>
+                  </div>
+                </form>
+              )}
             </Modal>
             <div className="flex-1 overflow-y-auto space-y-4 pr-2 hide-scrollbar">
               {quadrantTasks.map(task => (

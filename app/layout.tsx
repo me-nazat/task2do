@@ -11,8 +11,8 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: 'CHRONOS | Obsidian Metrics',
-  description: 'Precision Focus Task Manager',
+  title: 'Task2Do',
+  description: 'The ultimate Task Manager app',
 };
 
 import { AuthProvider } from '@/components/AuthProvider';

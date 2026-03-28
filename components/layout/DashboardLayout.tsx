@@ -11,9 +11,11 @@ import { getLists } from '@/actions/list';
 import { NotificationManager } from '@/components/NotificationManager';
 import { Task, List } from '@/store/useStore';
 import { Settings, Bell, Search, Menu } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 
 export function DashboardLayout() {
-  const { isSidebarOpen, isRightPaneOpen, toggleSidebar, setTasks, setLists, selectedTaskId, user, isAuthReady } = useStore();
+  const pathname = usePathname();
+  const { isSidebarOpen, isRightPaneOpen, toggleSidebar, isCollapsed, setTasks, setLists, selectedTaskId, user, isAuthReady, setCurrentView, setSelectedListId } = useStore();
 
   useEffect(() => {
     if (isAuthReady && user) {
@@ -39,6 +41,32 @@ export function DashboardLayout() {
     }
   }, [setTasks, setLists, user, isAuthReady]);
 
+  useEffect(() => {
+    const parts = pathname.split('/').filter(Boolean);
+    if (parts.length === 0) {
+      setCurrentView('list');
+      setSelectedListId('inbox');
+    } else if (parts[0] === 'list' && parts[1]) {
+      setCurrentView('list');
+      setSelectedListId(parts[1]);
+    } else {
+      const viewId = parts[0];
+      if (viewId === 'inbox') {
+        setCurrentView('list');
+        setSelectedListId('inbox');
+      } else {
+        const validViews = ['list', 'calendar', 'matrix', 'kanban', 'habits', 'today', 'upcoming', 'ai-chat', 'completed-reminders'];
+        if (validViews.includes(viewId)) {
+          setCurrentView(viewId as any);
+        } else {
+          // fallback to inbox if invalid path
+          setCurrentView('list');
+          setSelectedListId('inbox');
+        }
+      }
+    }
+  }, [pathname, setCurrentView, setSelectedListId]);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-surface text-on-surface">
       <NotificationManager />
@@ -47,7 +75,7 @@ export function DashboardLayout() {
       <div
         className={cn(
           "h-full transition-all duration-500 ease-in-out flex-shrink-0 z-40",
-          isSidebarOpen ? "w-72 opacity-100" : "w-0 opacity-0 overflow-hidden"
+          isSidebarOpen ? (isCollapsed ? "w-20 opacity-100" : "w-[260px] opacity-100") : "w-0 opacity-0 overflow-hidden"
         )}
       >
         <Sidebar />

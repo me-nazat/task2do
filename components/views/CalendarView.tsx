@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore, Task } from '@/store/useStore';
 import { 
   format, 
@@ -17,13 +17,62 @@ import {
   startOfDay,
   endOfDay
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Calendar as CalendarIcon, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { createTask, updateTask } from '@/actions/task';
 
 export function CalendarView() {
-  const { tasks, setSelectedTaskId } = useStore();
+  const { tasks, setSelectedTaskId, user, addTask, updateTask: updateTaskState, deleteTask } = useStore();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleAddTask = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && newTaskTitle.trim() && user && selectedDate) {
+      const title = newTaskTitle.trim();
+      setNewTaskTitle('');
+      
+      const tempId = `temp-${Date.now()}`;
+      const newTask: Task = {
+        id: tempId,
+        title,
+        isCompleted: false,
+        priority: 0,
+        startDate: selectedDate,
+        endDate: null,
+        isAllDay: false,
+        listId: null,
+        description: null,
+        quadrant: null,
+        parentId: null,
+        timezone: null,
+        reminderAt: null,
+        status: 'todo',
+      };
+      addTask(newTask);
+
+      try {
+        const id = await createTask({ title, startDate: selectedDate, userId: user.id });
+        updateTaskState(tempId, { id });
+      } catch (error) {
+        console.error('Failed to create task', error);
+        deleteTask(tempId);
+      }
+    }
+  };
+
+  const handleToggleComplete = async (taskId: string, currentStatus: boolean | null) => {
+    const newStatus = !currentStatus;
+    updateTaskState(taskId, { isCompleted: newStatus });
+    try {
+      await updateTask(taskId, { isCompleted: newStatus });
+    } catch (error) {
+      console.error('Failed to update task', error);
+      updateTaskState(taskId, { isCompleted: currentStatus }); // Revert
+    }
+  };
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
@@ -90,8 +139,9 @@ export function CalendarView() {
           return (
             <div 
               key={day.toString()}
+              onClick={() => setSelectedDate(day)}
               className={cn(
-                "min-h-[160px] p-4 border-r border-b border-outline-variant/10 flex flex-col gap-3 transition-all hover:bg-primary/[0.02]",
+                "min-h-[160px] p-4 border-r border-b border-outline-variant/10 flex flex-col gap-3 transition-all hover:bg-primary/[0.02] cursor-pointer",
                 !isCurrentMonth && "bg-primary/[0.01] opacity-30",
                 idx % 7 === 6 && "border-r-0"
               )}
@@ -131,6 +181,127 @@ export function CalendarView() {
           );
         })}
       </div>
+
+      <AnimatePresence>
+        {selectedDate && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/10 backdrop-blur-[8px]"
+            onClick={() => setSelectedDate(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl overflow-hidden shadow-2xl w-full max-w-2xl border border-outline-variant/20 flex flex-col max-h-[85vh]"
+            >
+              {/* Date Header & Quick Add */}
+              <div className="p-8 border-b border-outline-variant/10 bg-surface/50">
+                <div className="flex items-end justify-between mb-8">
+                  <div>
+                    <h2 className="font-headline font-medium text-4xl tracking-tight text-primary">
+                      {format(selectedDate, 'd')} {format(selectedDate, 'MMM')}
+                    </h2>
+                    <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-2 font-bold opacity-60">
+                      {format(selectedDate, 'EEEE')}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedDate(null)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors text-outline cursor-pointer"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Customized Quick Add Bar for selected date */}
+                <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-outline-variant/10 shadow-sm focus-within:shadow-md focus-within:border-primary/20 transition-all duration-500">
+                  <div className="ml-4 w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-primary/60" />
+                  </div>
+                  <input 
+                    ref={inputRef}
+                    autoFocus
+                    type="text" 
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    onKeyDown={handleAddTask}
+                    placeholder={`Capture a new objective for ${format(selectedDate, 'MMM d')}...`}
+                    className="flex-1 bg-transparent border-none focus:ring-0 py-4 font-body text-lg tracking-tight placeholder:text-outline/40 outline-none"
+                  />
+                  <div className="flex gap-4 px-6 border-l border-outline-variant/20">
+                    <CalendarIcon className="w-5 h-5 text-primary cursor-pointer transition-colors" />
+                    <Tag className="w-5 h-5 text-outline/40 cursor-pointer hover:text-primary transition-colors" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tasks for the date */}
+              <div className="p-8 overflow-y-auto space-y-3 bg-surface-container-lowest/30">
+                {(() => {
+                  const dayTasks = tasks.filter(t => t.startDate && isSameDay(new Date(t.startDate), selectedDate));
+                  
+                  if (dayTasks.length === 0) {
+                    return (
+                      <div className="text-center py-16 text-outline flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center">
+                          <CheckCircle2 className="w-6 h-6 text-outline/40" />
+                        </div>
+                        <div>
+                          <p className="text-xl font-headline italic text-primary">Clear Schedule</p>
+                          <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">No objectives logged for this exact date</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return dayTasks.map(task => (
+                    <div 
+                      key={task.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTaskId(task.id);
+                        setSelectedDate(null); // Optional: close modal when opening task details
+                      }}
+                      className={cn(
+                        "group flex items-center justify-between p-5 bg-white rounded-xl transition-all cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md",
+                        task.isCompleted && "opacity-60 grayscale-[0.5]"
+                      )}
+                    >
+                      <div className="flex items-center gap-6">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleComplete(task.id, task.isCompleted);
+                          }}
+                          className={cn(
+                            "w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center transition-all group-hover:border-primary",
+                            task.isCompleted ? "bg-primary border-primary" : "bg-transparent"
+                          )}
+                        >
+                          {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />}
+                        </button>
+                        <div>
+                          <p className={cn(
+                            "text-[15px] font-body transition-all",
+                            task.isCompleted ? "text-outline line-through" : "text-primary font-medium"
+                          )}>
+                            {task.title}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

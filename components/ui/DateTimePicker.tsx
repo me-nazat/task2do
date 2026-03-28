@@ -112,8 +112,8 @@ export function DateTimePicker({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-6 w-full max-w-full box-border">
+      <div className="flex flex-wrap items-center gap-3 w-full max-w-full">
         {/* Date Picker */}
         <Popover.Root>
           <Popover.Trigger asChild>
