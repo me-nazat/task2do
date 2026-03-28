@@ -21,21 +21,21 @@ const viewTransition = {
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -8 },
   transition: { type: 'spring', damping: 30, stiffness: 350, mass: 0.8 },
-};
+} as const;
 
 const listItemTransition = {
   initial: { opacity: 0, y: -8, scale: 0.97 },
   animate: { opacity: 1, y: 0, scale: 1 },
   exit: { opacity: 0, scale: 0.95, x: -20 },
   transition: { type: 'spring', damping: 28, stiffness: 400, mass: 0.6 },
-};
+} as const;
 
 const dropdownTransition = {
   initial: { opacity: 0, y: -6, scale: 0.95, filter: 'blur(4px)' },
   animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
   exit: { opacity: 0, y: -6, scale: 0.95, filter: 'blur(4px)' },
   transition: { type: 'spring', damping: 25, stiffness: 500, mass: 0.5 },
-};
+} as const;
 
 export function MainContent() {
   const { toggleSidebar, currentView, selectedListId, tasks, addTask, updateTask: updateTaskState, deleteTask, setSelectedTaskId, searchQuery, user, setAuthModalOpen } = useStore();
