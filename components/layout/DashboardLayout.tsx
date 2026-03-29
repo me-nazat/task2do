@@ -41,6 +41,14 @@ export function DashboardLayout() {
 
             setTasks(result.data as Task[]);
           })
+          .catch((error) => {
+            if (!isMounted) return;
+            console.error('Unhandled task fetching error:', error);
+            setDatabaseError({
+              code: 'DB_UNAVAILABLE',
+              message: 'An unexpected connection error occurred. Please refresh the page.'
+            });
+          });
       }
       
       // Only fetch lists if we don't already have them cached
@@ -58,6 +66,14 @@ export function DashboardLayout() {
 
             setLists(result.data as List[]);
           })
+          .catch((error) => {
+            if (!isMounted) return;
+            console.error('Unhandled list fetching error:', error);
+            setDatabaseError((currentError) => currentError ?? {
+              code: 'DB_UNAVAILABLE',
+              message: 'An unexpected connection error occurred. Please refresh the page.'
+            });
+          });
       }
 
       return () => {

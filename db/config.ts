@@ -23,59 +23,73 @@ export interface DatabaseConfig {
   url: string;
   authToken?: string;
   usingLocalFallback: boolean;
+  isValid: boolean;
+  error?: DatabaseError;
 }
 
 function resolveDatabaseConfig(): DatabaseConfig {
-  const databaseUrl = normalizeEnvValue(process.env.TURSO_DATABASE_URL);
-  const authToken = normalizeEnvValue(process.env.TURSO_AUTH_TOKEN);
+  try {
+    const databaseUrl = normalizeEnvValue(process.env.TURSO_DATABASE_URL);
+    const authToken = normalizeEnvValue(process.env.TURSO_AUTH_TOKEN);
 
-  if (!databaseUrl) {
-    if (!isDeployedEnvironment()) {
+    if (!databaseUrl) {
+      if (!isDeployedEnvironment()) {
+        return {
+          url: LOCAL_DATABASE_URL,
+          usingLocalFallback: true,
+          isValid: true,
+        };
+      }
+
+      throw new DatabaseError(
+        'DB_CONFIG',
+        'Turso database URL is not configured for this deployment.'
+      );
+    }
+
+    if (!databaseUrl.startsWith('libsql://') && !databaseUrl.startsWith('https://') && !databaseUrl.startsWith('file:')) {
+      throw new DatabaseError(
+        'DB_CONFIG',
+        'Turso database URL is not configured correctly. Expected a libsql, https, or file URL.'
+      );
+    }
+
+    if (databaseUrl.startsWith('file:')) {
+      if (isDeployedEnvironment()) {
+        throw new DatabaseError(
+          'DB_CONFIG',
+          'Local SQLite fallback is disabled for deployed environments.'
+        );
+      }
+
       return {
-        url: LOCAL_DATABASE_URL,
+        url: databaseUrl,
         usingLocalFallback: true,
+        isValid: true,
       };
     }
 
-    throw new DatabaseError(
-      'DB_CONFIG',
-      'Turso database URL is not configured for this deployment.'
-    );
-  }
-
-  if (!databaseUrl.startsWith('libsql://') && !databaseUrl.startsWith('https://') && !databaseUrl.startsWith('file:')) {
-    throw new DatabaseError(
-      'DB_CONFIG',
-      'Turso database URL is not configured correctly. Expected a libsql, https, or file URL.'
-    );
-  }
-
-  if (databaseUrl.startsWith('file:')) {
-    if (isDeployedEnvironment()) {
+    if (!authToken) {
       throw new DatabaseError(
         'DB_CONFIG',
-        'Local SQLite fallback is disabled for deployed environments.'
+        'Turso auth token is not configured for this deployment.'
       );
     }
 
     return {
       url: databaseUrl,
-      usingLocalFallback: true,
+      authToken,
+      usingLocalFallback: false,
+      isValid: true,
+    };
+  } catch (error) {
+    return {
+      url: '',
+      usingLocalFallback: false,
+      isValid: false,
+      error: error instanceof DatabaseError ? error : new DatabaseError('DB_CONFIG', 'Failed to resolve database configuration.', { cause: error as Error }),
     };
   }
-
-  if (!authToken) {
-    throw new DatabaseError(
-      'DB_CONFIG',
-      'Turso auth token is not configured for this deployment.'
-    );
-  }
-
-  return {
-    url: databaseUrl,
-    authToken,
-    usingLocalFallback: false,
-  };
 }
 
 export const databaseConfig = resolveDatabaseConfig();

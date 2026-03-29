@@ -14,15 +14,15 @@ type HabitWithLogs = typeof habits.$inferSelect & {
 export async function getHabits(userId: string): Promise<DatabaseActionResult<HabitWithLogs[]>> {
   try {
     const allHabits = await db.select().from(habits).where(eq(habits.userId, userId));
-    const habitIds = allHabits.map(h => h.id);
+    const habitIds = allHabits.map((h: typeof habits.$inferSelect) => h.id);
     
     if (habitIds.length === 0) return okResult([]);
 
     const allLogs = await db.select().from(habitLogs).where(inArray(habitLogs.habitId, habitIds));
     
-    return okResult(allHabits.map(habit => ({
+    return okResult(allHabits.map((habit: typeof habits.$inferSelect) => ({
       ...habit,
-      logs: allLogs.filter(log => log.habitId === habit.id)
+      logs: allLogs.filter((log: typeof habitLogs.$inferSelect) => log.habitId === habit.id)
     })));
   } catch (error) {
     console.error('Failed to get habits', error);
