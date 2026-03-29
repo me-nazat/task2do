@@ -9,9 +9,9 @@ import { revalidatePath } from 'next/cache';
 export async function getTasks(userId: string) {
   try {
     return await db.select().from(tasks).where(eq(tasks.userId, userId)).orderBy(tasks.createdAt);
-  } catch (error) {
-    console.error('Failed to get tasks', error);
-    return [];
+  } catch (error: any) {
+    console.error('Failed to get tasks:', error);
+    throw new Error(error.message || 'Database connection failed while fetching tasks.');
   }
 }
 

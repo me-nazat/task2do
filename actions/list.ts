@@ -9,9 +9,9 @@ import { revalidatePath } from 'next/cache';
 export async function getLists(userId: string) {
   try {
     return await db.select().from(lists).where(eq(lists.userId, userId)).orderBy(lists.createdAt);
-  } catch (error) {
-    console.error('Failed to get lists', error);
-    return [];
+  } catch (error: any) {
+    console.error('Failed to get lists:', error);
+    throw new Error(error.message || 'Database connection failed while fetching lists.');
   }
 }
 

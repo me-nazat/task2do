@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+
+export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 
 export async function GET() {

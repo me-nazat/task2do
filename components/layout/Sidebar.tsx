@@ -27,10 +27,10 @@ import { AuthModal } from '@/components/AuthModal';
 import { useState } from 'react';
 import { createList } from '@/actions/list';
 import { Modal } from '@/components/ui/Modal';
-import { useRouter } from 'next/navigation';
+
 
 export function Sidebar() {
-  const router = useRouter();
+
   const { currentView, setCurrentView, selectedListId, setSelectedListId, searchQuery, setSearchQuery, lists, user, addList, isCollapsed, toggleCollapsed, isAuthModalOpen, setAuthModalOpen } = useStore();
   const [isAddListModalOpen, setIsAddListModalOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -115,7 +115,7 @@ export function Sidebar() {
                       setSelectedListId(item.id);
                     }
                     setCurrentView(item.view as any);
-                    router.push(`/${item.id}`);
+                    window.history.pushState(null, '', `/${item.id}`);
                   }}
                   className={cn(
                     "flex items-center gap-3 font-body text-sm rounded-lg group",
@@ -179,7 +179,7 @@ export function Sidebar() {
                 onClick={() => {
                   setSelectedListId(list.id);
                   setCurrentView('list');
-                  router.push(`/list/${list.id}`);
+                  window.history.pushState(null, '', `/list/${list.id}`);
                 }}
                 className={cn(
                   "flex items-center gap-3 transition-all duration-500 text-sm font-body rounded-lg group",

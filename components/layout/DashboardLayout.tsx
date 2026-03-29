@@ -27,8 +27,9 @@ export function DashboardLayout() {
             setTasks(fetchedTasks as Task[]);
           })
           .catch((error) => {
-            console.error('Failed to get tasks', error);
+            console.error('Failed to get tasks:', error);
             setTasks([]);
+            alert('Database Connection Failed: Unable to load your tasks from Turso. Please check your data or refresh.');
           });
       }
       
@@ -39,8 +40,9 @@ export function DashboardLayout() {
             setLists(fetchedLists as List[]);
           })
           .catch((error) => {
-            console.error('Failed to get lists', error);
+            console.error('Failed to get lists:', error);
             setLists([]);
+            alert('Database Connection Failed: Unable to load your collections from Turso.');
           });
       }
     } else if (isAuthReady && !user) {
