@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { MoreHorizontal, Plus, Circle, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { isSameDay, isThisWeek } from 'date-fns';
+import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 
 const COLUMNS: { id: 'todo' | 'in-progress' | 'done', title: string }[] = [
   { id: 'todo', title: 'To Do' },
@@ -22,9 +23,10 @@ export function KanbanView() {
     const isCompleted = newStatus === 'done';
     updateTaskState(taskId, { status: newStatus, isCompleted });
     try {
-      await updateTask(taskId, { status: newStatus, isCompleted });
+      unwrapDatabaseResult(await updateTask(taskId, { status: newStatus, isCompleted }));
     } catch (error) {
       console.error('Failed to update task status', error);
+      alert(getClientErrorMessage(error, 'Unable to update the task status right now.'));
     }
   };
 

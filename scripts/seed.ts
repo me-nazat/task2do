@@ -1,14 +1,14 @@
 import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env' });
-console.log('TURSO_DATABASE_URL:', process.env.TURSO_DATABASE_URL);
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
-import { db } from '../db';
-import { tasks, lists, habits, habitLogs, users } from '../db/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, subDays, format } from 'date-fns';
 
 async function seed() {
   console.log('Seeding database...');
+  const { db } = await import('../db/core');
+  const { tasks, lists, habits, habitLogs, users } = await import('../db/schema');
 
   const userId = 'user_2b1c3d4e5f6g7h8i9j0k'; // Replace with a valid user ID if needed, or just use a dummy one for testing
 

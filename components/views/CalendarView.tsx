@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Calendar as Cale
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
+import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 
 export function CalendarView() {
   const { tasks, setSelectedTaskId, user, addTask, updateTask: updateTaskState, deleteTask } = useStore();
@@ -74,7 +75,7 @@ export function CalendarView() {
       addTask(newTask);
 
       try {
-        const id = await createTask({
+        const id = unwrapDatabaseResult(await createTask({
           title,
           startDate: selectedDate,
           userId: user.id,
@@ -86,11 +87,12 @@ export function CalendarView() {
               ? `weekly:${calendarRecurrenceDays.join(',')}` 
               : calendarRecurrence === 'none' ? undefined : calendarRecurrence
           ) : undefined,
-        });
+        }));
         updateTaskState(tempId, { id });
       } catch (error) {
         console.error('Failed to create task', error);
         deleteTask(tempId);
+        alert(getClientErrorMessage(error, 'Unable to create task right now.'));
       }
 
       if (showDetails) {
@@ -103,10 +105,11 @@ export function CalendarView() {
     const newStatus = !currentStatus;
     updateTaskState(taskId, { isCompleted: newStatus });
     try {
-      await updateTask(taskId, { isCompleted: newStatus });
+      unwrapDatabaseResult(await updateTask(taskId, { isCompleted: newStatus }));
     } catch (error) {
       console.error('Failed to update task', error);
       updateTaskState(taskId, { isCompleted: currentStatus }); // Revert
+      alert(getClientErrorMessage(error, 'Unable to update the task right now.'));
     }
   };
 

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Circle, CheckCircle2, Plus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 
 const quadrants = [
   { id: 'urgent-important', title: 'Urgent & Important', color: 'bg-error/5 border-error/20 text-error' },
@@ -27,9 +28,10 @@ export function MatrixView() {
     setIsAddTaskModalOpen(false);
     setIsImporting(false);
     try {
-      await updateTask(taskId, { quadrant: activeQuadrant });
+      unwrapDatabaseResult(await updateTask(taskId, { quadrant: activeQuadrant }));
     } catch (error) {
       console.error('Failed to import task to matrix', error);
+      alert(getClientErrorMessage(error, 'Unable to move that task into the matrix right now.'));
     }
   };
 
@@ -62,10 +64,12 @@ export function MatrixView() {
     setNewTaskTitle('');
     setIsAddTaskModalOpen(false);
     try {
-      const id = await createTask({ title, listId: selectedListId || undefined, quadrant: quadrantId, userId: user.id });
+      const id = unwrapDatabaseResult(await createTask({ title, listId: selectedListId || undefined, quadrant: quadrantId, userId: user.id }));
       updateTaskState(tempId, { id });
     } catch (error) {
       console.error('Failed to create task', error);
+      useStore.getState().deleteTask(tempId);
+      alert(getClientErrorMessage(error, 'Unable to create task right now.'));
     }
   };
 
@@ -79,7 +83,11 @@ export function MatrixView() {
     const taskId = e.dataTransfer.getData('taskId');
     if (taskId) {
       updateTaskState(taskId, { quadrant: quadrantId });
-      await updateTask(taskId, { quadrant: quadrantId });
+      try {
+        unwrapDatabaseResult(await updateTask(taskId, { quadrant: quadrantId }));
+      } catch (error) {
+        alert(getClientErrorMessage(error, 'Unable to move that task right now.'));
+      }
     }
   };
 
@@ -95,9 +103,10 @@ export function MatrixView() {
     const newStatus = !currentStatus;
     updateTaskState(taskId, { isCompleted: newStatus });
     try {
-      await updateTask(taskId, { isCompleted: newStatus });
+      unwrapDatabaseResult(await updateTask(taskId, { isCompleted: newStatus }));
     } catch (error) {
       updateTaskState(taskId, { isCompleted: currentStatus });
+      alert(getClientErrorMessage(error, 'Unable to update the task right now.'));
     }
   };
 

@@ -1,21 +1,23 @@
 'use server';
 
 import { db } from '@/db';
+import { DatabaseActionResult, errorResult, okResult } from '@/db/errors';
 import { lists } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { revalidatePath } from 'next/cache';
 
-export async function getLists(userId: string) {
+export async function getLists(userId: string): Promise<DatabaseActionResult<typeof lists.$inferSelect[]>> {
   try {
-    return await db.select().from(lists).where(eq(lists.userId, userId)).orderBy(lists.createdAt);
+    const data = await db.select().from(lists).where(eq(lists.userId, userId)).orderBy(lists.createdAt);
+    return okResult(data);
   } catch (error: any) {
     console.error('Failed to get lists:', error);
-    throw new Error(error.message || 'Database connection failed while fetching lists.');
+    return errorResult(error);
   }
 }
 
-export async function createList(name: string, userId: string, color?: string) {
+export async function createList(name: string, userId: string, color?: string): Promise<DatabaseActionResult<string>> {
   try {
     const id = uuidv4();
 
@@ -28,19 +30,20 @@ export async function createList(name: string, userId: string, color?: string) {
     });
 
     revalidatePath('/');
-    return id;
+    return okResult(id);
   } catch (error) {
     console.error('Failed to create list', error);
-    throw error;
+    return errorResult(error);
   }
 }
 
-export async function deleteList(id: string) {
+export async function deleteList(id: string): Promise<DatabaseActionResult<null>> {
   try {
     await db.delete(lists).where(eq(lists.id, id));
     revalidatePath('/');
+    return okResult(null);
   } catch (error) {
     console.error('Failed to delete list', error);
-    throw error;
+    return errorResult(error);
   }
 }

@@ -1,8 +1,12 @@
-import { db } from '../db';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
+
 import { sql } from 'drizzle-orm';
 
 async function main() {
   try {
+    const { db } = await import('../db/core');
     const result = await db.run(sql`SELECT name FROM sqlite_master WHERE type='table'`);
     console.log('Tables in database:', result.rows);
   } catch (error) {

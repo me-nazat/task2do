@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { getHabits, createHabit, toggleHabitLog } from '@/actions/habit';
 import { Modal } from '@/components/ui/Modal';
+import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 
 interface HabitWithLogs {
   id: string;
@@ -31,12 +32,19 @@ export function HabitTrackerView() {
   const [loading, setLoading] = useState(true);
   const [isAddHabitModalOpen, setIsAddHabitModalOpen] = useState(false);
   const [newHabitName, setNewHabitName] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchHabits = async () => {
       if (user) {
-        const data = await getHabits(user.id);
-        setHabits(data);
+        try {
+          const data = unwrapDatabaseResult(await getHabits(user.id));
+          setHabits(data);
+          setError(null);
+        } catch (fetchError) {
+          setHabits([]);
+          setError(getClientErrorMessage(fetchError, 'Unable to load habits right now.'));
+        }
       }
       setLoading(false);
     };
@@ -65,20 +73,32 @@ export function HabitTrackerView() {
       return h;
     }));
 
-    await toggleHabitLog(habitId, date, 'completed');
-    const data = await getHabits(user.id);
-    setHabits(data);
+    try {
+      unwrapDatabaseResult(await toggleHabitLog(habitId, date, 'completed'));
+      const data = unwrapDatabaseResult(await getHabits(user.id));
+      setHabits(data);
+      setError(null);
+    } catch (toggleError) {
+      setError(getClientErrorMessage(toggleError, 'Unable to update habit progress right now.'));
+      const data = unwrapDatabaseResult(await getHabits(user.id));
+      setHabits(data);
+    }
   };
 
   const handleAddHabit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newHabitName.trim()) return;
     
-    await createHabit({ name: newHabitName.trim(), frequency: 'daily', userId: user.id });
-    const data = await getHabits(user.id);
-    setHabits(data);
-    setNewHabitName('');
-    setIsAddHabitModalOpen(false);
+    try {
+      unwrapDatabaseResult(await createHabit({ name: newHabitName.trim(), frequency: 'daily', userId: user.id }));
+      const data = unwrapDatabaseResult(await getHabits(user.id));
+      setHabits(data);
+      setError(null);
+      setNewHabitName('');
+      setIsAddHabitModalOpen(false);
+    } catch (createError) {
+      setError(getClientErrorMessage(createError, 'Unable to create habit right now.'));
+    }
   };
 
   if (loading) return <div className="flex items-center justify-center h-full font-headline font-bold tracking-widest uppercase text-outline">Loading habits...</div>;
@@ -160,6 +180,11 @@ export function HabitTrackerView() {
         </Modal>
 
         <div className="flex-1 overflow-y-auto p-6">
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-body text-red-800">
+              {error}
+            </div>
+          )}
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b-2 border-outline-variant">

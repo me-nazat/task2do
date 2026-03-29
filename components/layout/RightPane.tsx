@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
+import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 
 export function RightPane() {
   const { selectedTaskId, setSelectedTaskId, tasks, updateTask: updateTaskState, deleteTask: deleteTaskState, user } = useStore();
@@ -48,16 +49,17 @@ export function RightPane() {
     setNewSubtaskTitle('');
 
     try {
-      const realId = await createTask({
+      const realId = unwrapDatabaseResult(await createTask({
         title: newSubtaskTitle,
         listId: task.listId || undefined,
         parentId: task.id,
         userId: user.id,
-      });
+      }));
       useStore.getState().updateTask(tempId, { id: realId });
     } catch (error) {
       console.error('Failed to create subtask', error);
       useStore.getState().deleteTask(tempId);
+      alert(getClientErrorMessage(error, 'Unable to create subtask right now.'));
     }
   };
 
@@ -65,30 +67,43 @@ export function RightPane() {
     const newStatus = !currentStatus;
     updateTaskState(subtaskId, { isCompleted: newStatus });
     try {
-      await updateTask(subtaskId, { isCompleted: newStatus });
+      unwrapDatabaseResult(await updateTask(subtaskId, { isCompleted: newStatus }));
     } catch (error) {
       updateTaskState(subtaskId, { isCompleted: currentStatus });
+      alert(getClientErrorMessage(error, 'Unable to update subtask right now.'));
     }
   };
 
   const handleTitleBlur = async () => {
     if (title !== task.title) {
       updateTaskState(task.id, { title });
-      await updateTask(task.id, { title });
+      try {
+        unwrapDatabaseResult(await updateTask(task.id, { title }));
+      } catch (error) {
+        alert(getClientErrorMessage(error, 'Unable to rename task right now.'));
+      }
     }
   };
 
   const handleDescriptionBlur = async () => {
     if (description !== (task.description || '')) {
       updateTaskState(task.id, { description });
-      await updateTask(task.id, { description });
+      try {
+        unwrapDatabaseResult(await updateTask(task.id, { description }));
+      } catch (error) {
+        alert(getClientErrorMessage(error, 'Unable to save notes right now.'));
+      }
     }
   };
 
   const handleDelete = async () => {
     deleteTaskState(task.id);
     setSelectedTaskId(null);
-    await deleteTask(task.id);
+    try {
+      unwrapDatabaseResult(await deleteTask(task.id));
+    } catch (error) {
+      alert(getClientErrorMessage(error, 'Unable to delete task right now.'));
+    }
   };
 
   return (
@@ -145,7 +160,11 @@ export function RightPane() {
                 reminderAt={task.reminderAt ? new Date(task.reminderAt) : null}
                 onChange={async (updates) => {
                   updateTaskState(task.id, updates);
-                  await updateTask(task.id, updates);
+                  try {
+                    unwrapDatabaseResult(await updateTask(task.id, updates));
+                  } catch (error) {
+                    alert(getClientErrorMessage(error, 'Unable to update the schedule right now.'));
+                  }
                 }}
               />
             </div>
@@ -162,7 +181,11 @@ export function RightPane() {
                   const status = e.target.value as any;
                   const isCompleted = status === 'done';
                   updateTaskState(task.id, { status, isCompleted });
-                  await updateTask(task.id, { status, isCompleted });
+                  try {
+                    unwrapDatabaseResult(await updateTask(task.id, { status, isCompleted }));
+                  } catch (error) {
+                    alert(getClientErrorMessage(error, 'Unable to update the task status right now.'));
+                  }
                 }}
                 className="w-full max-w-full bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
               >
@@ -188,7 +211,11 @@ export function RightPane() {
                   key={p.value}
                   onClick={async () => {
                     updateTaskState(task.id, { priority: p.value });
-                    await updateTask(task.id, { priority: p.value });
+                    try {
+                      unwrapDatabaseResult(await updateTask(task.id, { priority: p.value }));
+                    } catch (error) {
+                      alert(getClientErrorMessage(error, 'Unable to update the task priority right now.'));
+                    }
                   }}
                   className={cn(
                     "p-2.5 rounded-full transition-all hover:bg-surface-container-low",
@@ -212,7 +239,11 @@ export function RightPane() {
                 onChange={async (e) => {
                   const quadrant = e.target.value === 'none' ? null : e.target.value;
                   updateTaskState(task.id, { quadrant });
-                  await updateTask(task.id, { quadrant });
+                  try {
+                    unwrapDatabaseResult(await updateTask(task.id, { quadrant }));
+                  } catch (error) {
+                    alert(getClientErrorMessage(error, 'Unable to update the matrix quadrant right now.'));
+                  }
                 }}
                 className="w-full max-w-full bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
               >
@@ -278,7 +309,11 @@ export function RightPane() {
                 <button 
                   onClick={async () => {
                     useStore.getState().deleteTask(subtask.id);
-                    await deleteTask(subtask.id);
+                    try {
+                      unwrapDatabaseResult(await deleteTask(subtask.id));
+                    } catch (error) {
+                      alert(getClientErrorMessage(error, 'Unable to delete subtask right now.'));
+                    }
                   }}
                   className="ml-auto opacity-0 group-hover:opacity-100 p-2 hover:bg-error/10 text-outline/40 hover:text-error transition-all rounded-full"
                 >

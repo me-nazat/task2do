@@ -15,6 +15,7 @@ import { HabitTrackerView } from '@/components/views/HabitTrackerView';
 import { AIChatView } from '@/components/views/AIChatView';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { AlertBanner } from '@/components/ui/AlertBanner';
+import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 
 // Animation presets for consistent, smooth micro-interactions
 const viewTransition = {
@@ -142,7 +143,7 @@ export function MainContent() {
     handleCloseAddModal();
 
     try {
-      const id = await createTask({
+      const id = unwrapDatabaseResult(await createTask({
         title,
         listId: selectedListId || undefined,
         userId: user.id,
@@ -154,11 +155,12 @@ export function MainContent() {
         recurrence: modalRecurrence === 'weekly' && modalRecurrenceDays.length > 0 
           ? `weekly:${modalRecurrenceDays.join(',')}` 
           : modalRecurrence === 'none' ? undefined : modalRecurrence,
-      });
+      }));
       updateTaskState(tempId, { id });
     } catch (error) {
       console.error('Failed to create task', error);
       deleteTask(tempId);
+      alert(getClientErrorMessage(error, 'Unable to create task right now.'));
     }
   };
 
@@ -166,10 +168,11 @@ export function MainContent() {
     const newStatus = !currentStatus;
     updateTaskState(taskId, { isCompleted: newStatus });
     try {
-      await updateTask(taskId, { isCompleted: newStatus });
+      unwrapDatabaseResult(await updateTask(taskId, { isCompleted: newStatus }));
     } catch (error) {
       console.error('Failed to update task', error);
       updateTaskState(taskId, { isCompleted: currentStatus });
+      alert(getClientErrorMessage(error, 'Unable to update the task right now.'));
     }
   };
 

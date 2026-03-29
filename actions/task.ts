@@ -1,21 +1,23 @@
 'use server';
 
 import { db } from '@/db';
+import { DatabaseActionResult, errorResult, okResult, toPublicDatabaseError } from '@/db/errors';
 import { tasks, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { revalidatePath } from 'next/cache';
 
-export async function getTasks(userId: string) {
+export async function getTasks(userId: string): Promise<DatabaseActionResult<typeof tasks.$inferSelect[]>> {
   try {
-    return await db.select().from(tasks).where(eq(tasks.userId, userId)).orderBy(tasks.createdAt);
+    const data = await db.select().from(tasks).where(eq(tasks.userId, userId)).orderBy(tasks.createdAt);
+    return okResult(data);
   } catch (error: any) {
     console.error('Failed to get tasks:', error);
-    throw new Error(error.message || 'Database connection failed while fetching tasks.');
+    return errorResult(error);
   }
 }
 
-export async function createTask(data: { title: string; listId?: string; startDate?: Date; endDate?: Date; isAllDay?: boolean; parentId?: string; quadrant?: string; priority?: number; status?: string; reminderAt?: Date; userId: string; recurrence?: string }) {
+export async function createTask(data: { title: string; listId?: string; startDate?: Date; endDate?: Date; isAllDay?: boolean; parentId?: string; quadrant?: string; priority?: number; status?: string; reminderAt?: Date; userId: string; recurrence?: string }): Promise<DatabaseActionResult<string>> {
   try {
     const id = uuidv4();
     const { userId, ...taskData } = data;
@@ -54,14 +56,14 @@ export async function createTask(data: { title: string; listId?: string; startDa
     });
 
     revalidatePath('/');
-    return id;
+    return okResult(id);
   } catch (error) {
     console.error('Failed to create task', error);
-    throw error;
+    return errorResult(error);
   }
 }
 
-export async function updateTask(id: string, data: Partial<typeof tasks.$inferInsert>) {
+export async function updateTask(id: string, data: Partial<typeof tasks.$inferInsert>): Promise<DatabaseActionResult<null>> {
   try {
     const smartLists = ['inbox', 'today', 'upcoming', 'someday', 'matrix'];
     const updateData = { ...data, updatedAt: new Date() };
@@ -72,18 +74,20 @@ export async function updateTask(id: string, data: Partial<typeof tasks.$inferIn
 
     await db.update(tasks).set(updateData).where(eq(tasks.id, id));
     revalidatePath('/');
+    return okResult(null);
   } catch (error) {
     console.error('Failed to update task', error);
-    throw error;
+    return errorResult(error);
   }
 }
 
-export async function deleteTask(id: string) {
+export async function deleteTask(id: string): Promise<DatabaseActionResult<null>> {
   try {
     await db.delete(tasks).where(eq(tasks.id, id));
     revalidatePath('/');
+    return okResult(null);
   } catch (error) {
     console.error('Failed to delete task', error);
-    throw error;
+    return errorResult(error);
   }
 }

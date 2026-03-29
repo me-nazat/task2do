@@ -1,31 +1,36 @@
 'use server';
 
 import { db } from '@/db';
+import { DatabaseActionResult, errorResult, okResult } from '@/db/errors';
 import { habits, habitLogs } from '@/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { revalidatePath } from 'next/cache';
 
-export async function getHabits(userId: string) {
+type HabitWithLogs = typeof habits.$inferSelect & {
+  logs: typeof habitLogs.$inferSelect[];
+};
+
+export async function getHabits(userId: string): Promise<DatabaseActionResult<HabitWithLogs[]>> {
   try {
     const allHabits = await db.select().from(habits).where(eq(habits.userId, userId));
     const habitIds = allHabits.map(h => h.id);
     
-    if (habitIds.length === 0) return [];
+    if (habitIds.length === 0) return okResult([]);
 
     const allLogs = await db.select().from(habitLogs).where(inArray(habitLogs.habitId, habitIds));
     
-    return allHabits.map(habit => ({
+    return okResult(allHabits.map(habit => ({
       ...habit,
       logs: allLogs.filter(log => log.habitId === habit.id)
-    }));
+    })));
   } catch (error) {
     console.error('Failed to get habits', error);
-    return [];
+    return errorResult(error);
   }
 }
 
-export async function createHabit(data: { name: string; frequency: string; userId: string }) {
+export async function createHabit(data: { name: string; frequency: string; userId: string }): Promise<DatabaseActionResult<string>> {
   try {
     const id = uuidv4();
     
@@ -38,14 +43,14 @@ export async function createHabit(data: { name: string; frequency: string; userI
     });
     
     revalidatePath('/');
-    return id;
+    return okResult(id);
   } catch (error) {
     console.error('Failed to create habit', error);
-    throw error;
+    return errorResult(error);
   }
 }
 
-export async function toggleHabitLog(habitId: string, date: string, status: string) {
+export async function toggleHabitLog(habitId: string, date: string, status: string): Promise<DatabaseActionResult<null>> {
   try {
     const existing = await db.select().from(habitLogs).where(
       and(
@@ -70,8 +75,9 @@ export async function toggleHabitLog(habitId: string, date: string, status: stri
     }
     
     revalidatePath('/');
+    return okResult(null);
   } catch (error) {
     console.error('Failed to toggle habit log', error);
-    throw error;
+    return errorResult(error);
   }
 }

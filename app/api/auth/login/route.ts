@@ -1,25 +1,25 @@
 import { NextResponse } from 'next/server';
-import client from '@/lib/turso';
+import { db } from '@/db';
+import { toPublicDatabaseError } from '@/db/errors';
+import { users } from '@/db/schema';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { eq } from 'drizzle-orm';
 
 export async function POST(req: Request) {
   const { email, password } = await req.json();
   const lowerEmail = email.trim().toLowerCase();
 
   try {
-    const result = await client.execute({
-      sql: 'SELECT * FROM users WHERE email = ?',
-      args: [lowerEmail],
-    });
+    const result = await db.select().from(users).where(eq(users.email, lowerEmail)).limit(1);
 
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const user = result.rows[0];
-    const passwordMatch = await bcrypt.compare(password, user.password as string);
+    const user = result[0];
+    const passwordMatch = user.password ? await bcrypt.compare(password, user.password) : false;
 
     if (!passwordMatch) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } });
   } catch (err: any) {
     console.error('Login error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const error = toPublicDatabaseError(err);
+    return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
   }
 }

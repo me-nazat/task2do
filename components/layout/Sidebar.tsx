@@ -23,6 +23,7 @@ import {
   CircleCheckBig
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 import { AuthModal } from '@/components/AuthModal';
 import { useState } from 'react';
 import { createList } from '@/actions/list';
@@ -38,11 +39,15 @@ export function Sidebar() {
   const handleAddList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newListName.trim()) return;
-    
-    const id = await createList(newListName.trim(), user.id);
-    addList({ id, name: newListName.trim(), userId: user.id, color: '#3b82f6', isDefault: false, createdAt: new Date() });
-    setNewListName('');
-    setIsAddListModalOpen(false);
+
+    try {
+      const id = unwrapDatabaseResult(await createList(newListName.trim(), user.id));
+      addList({ id, name: newListName.trim(), userId: user.id, color: '#3b82f6', isDefault: false, createdAt: new Date() });
+      setNewListName('');
+      setIsAddListModalOpen(false);
+    } catch (error) {
+      alert(getClientErrorMessage(error, 'Unable to create collection right now.'));
+    }
   };
 
   const handleLogin = () => {

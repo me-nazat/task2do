@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { Sidebar } from './Sidebar';
 import { MainContent } from './MainContent';
@@ -10,47 +10,64 @@ import { getTasks } from '@/actions/task';
 import { getLists } from '@/actions/list';
 import { NotificationManager } from '@/components/NotificationManager';
 import { Task, List } from '@/store/useStore';
-import { Settings, Bell, Search, Menu } from 'lucide-react';
+import { AlertTriangle, Bell, Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { AlertBanner } from '@/components/ui/AlertBanner';
+import { PublicDatabaseError } from '@/db/errors';
 
 export function DashboardLayout() {
   const pathname = usePathname();
   const { isSidebarOpen, isRightPaneOpen, toggleSidebar, isCollapsed, setTasks, setLists, selectedTaskId, user, isAuthReady, setCurrentView, setSelectedListId, tasks, lists } = useStore();
+  const [databaseError, setDatabaseError] = useState<PublicDatabaseError | null>(null);
 
   // Fetch data only when auth is ready, user exists, and we don't already have cached data
   useEffect(() => {
     if (isAuthReady && user) {
+      setDatabaseError(null);
+      let isMounted = true;
+
       // Only fetch tasks if we don't already have them cached
       if (tasks.length === 0) {
         getTasks(user.id)
-          .then((fetchedTasks) => {
-            setTasks(fetchedTasks as Task[]);
+          .then((result) => {
+            if (!isMounted) return;
+
+            if (!result.ok) {
+              console.error('Failed to get tasks:', result.error);
+              setTasks([]);
+              setDatabaseError(result.error);
+              return;
+            }
+
+            setTasks(result.data as Task[]);
           })
-          .catch((error: any) => {
-            console.error('Failed to get tasks:', error);
-            setTasks([]);
-            const errorMsg = error?.message || 'Unknown database error';
-            alert(`Database Connection Failed:\n\n${errorMsg}\n\nIf this is the production site, please ensure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set in your Vercel Project Settings.`);
-          });
       }
       
       // Only fetch lists if we don't already have them cached
       if (lists.length === 0) {
         getLists(user.id)
-          .then((fetchedLists) => {
-            setLists(fetchedLists as List[]);
+          .then((result) => {
+            if (!isMounted) return;
+
+            if (!result.ok) {
+              console.error('Failed to get lists:', result.error);
+              setLists([]);
+              setDatabaseError((currentError) => currentError ?? result.error);
+              return;
+            }
+
+            setLists(result.data as List[]);
           })
-          .catch((error: any) => {
-            console.error('Failed to get lists:', error);
-            setLists([]);
-            const errorMsg = error?.message || 'Unknown database error';
-            alert(`Database Connection Failed:\n\n${errorMsg}`);
-          });
       }
+
+      return () => {
+        isMounted = false;
+      };
     } else if (isAuthReady && !user) {
       // Clear data when user logs out
       setTasks([]);
       setLists([]);
+      setDatabaseError(null);
     }
   }, [setTasks, setLists, user, isAuthReady, tasks.length, lists.length]);
 
@@ -114,6 +131,23 @@ export function DashboardLayout() {
 
         {/* Center Pane */}
         <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden transition-all duration-300">
+          {databaseError && (
+            <div className="px-6 pt-6 pb-0 md:px-10">
+              <AlertBanner
+                title="Database connection issue"
+                subtitle={databaseError.code.replace('DB_', '').replace('_', ' ')}
+                icon={AlertTriangle}
+                colorScheme="red"
+              >
+                <p className="text-sm font-body text-red-900/80 leading-relaxed">
+                  {databaseError.message}
+                </p>
+                <p className="text-[10px] font-label font-bold uppercase tracking-[0.18em] text-red-700/70">
+                  Refresh after updating the Turso and Vercel configuration.
+                </p>
+              </AlertBanner>
+            </div>
+          )}
           <MainContent />
         </div>
       </main>
