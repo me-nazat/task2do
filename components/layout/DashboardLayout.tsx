@@ -26,10 +26,11 @@ export function DashboardLayout() {
           .then((fetchedTasks) => {
             setTasks(fetchedTasks as Task[]);
           })
-          .catch((error) => {
+          .catch((error: any) => {
             console.error('Failed to get tasks:', error);
             setTasks([]);
-            alert('Database Connection Failed: Unable to load your tasks from Turso. Please check your data or refresh.');
+            const errorMsg = error?.message || 'Unknown database error';
+            alert(`Database Connection Failed:\n\n${errorMsg}\n\nIf this is the production site, please ensure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set in your Vercel Project Settings.`);
           });
       }
       
@@ -39,10 +40,11 @@ export function DashboardLayout() {
           .then((fetchedLists) => {
             setLists(fetchedLists as List[]);
           })
-          .catch((error) => {
+          .catch((error: any) => {
             console.error('Failed to get lists:', error);
             setLists([]);
-            alert('Database Connection Failed: Unable to load your collections from Turso.');
+            const errorMsg = error?.message || 'Unknown database error';
+            alert(`Database Connection Failed:\n\n${errorMsg}`);
           });
       }
     } else if (isAuthReady && !user) {
