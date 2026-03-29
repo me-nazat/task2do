@@ -17,7 +17,7 @@ import {
   startOfDay,
   endOfDay
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Calendar as CalendarIcon, Tag, ChevronDown, Flag, LayoutDashboard, AlignLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Calendar as CalendarIcon, Tag, ChevronDown, Flag, LayoutDashboard, AlignLeft, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
@@ -33,6 +33,8 @@ export function CalendarView() {
   const [showDetails, setShowDetails] = useState(false);
   const [calendarPriority, setCalendarPriority] = useState<number>(0);
   const [calendarQuadrant, setCalendarQuadrant] = useState<string | null>(null);
+  const [calendarRecurrence, setCalendarRecurrence] = useState<string>('none');
+  const [calendarRecurrenceDays, setCalendarRecurrenceDays] = useState<number[]>([]);
   const [calendarStatus, setCalendarStatus] = useState<'todo' | 'in-progress' | 'done'>('todo');
   const [calendarDescription, setCalendarDescription] = useState('');
 
@@ -65,6 +67,9 @@ export function CalendarView() {
         timezone: null,
         reminderAt: null,
         status: showDetails ? calendarStatus : 'todo',
+        recurrence: calendarRecurrence === 'weekly' && calendarRecurrenceDays.length > 0 
+          ? `weekly:${calendarRecurrenceDays.join(',')}` 
+          : calendarRecurrence === 'none' ? null : calendarRecurrence,
       };
       addTask(newTask);
 
@@ -73,9 +78,14 @@ export function CalendarView() {
           title,
           startDate: selectedDate,
           userId: user.id,
-          priority: showDetails ? calendarPriority : undefined,
-          quadrant: showDetails && calendarQuadrant ? calendarQuadrant : undefined,
+          priority: showDetails ? calendarPriority : 0,
           status: showDetails ? calendarStatus : undefined,
+          quadrant: showDetails ? calendarQuadrant || undefined : undefined,
+          recurrence: showDetails ? (
+            calendarRecurrence === 'weekly' && calendarRecurrenceDays.length > 0 
+              ? `weekly:${calendarRecurrenceDays.join(',')}` 
+              : calendarRecurrence === 'none' ? undefined : calendarRecurrence
+          ) : undefined,
         });
         updateTaskState(tempId, { id });
       } catch (error) {
@@ -315,6 +325,54 @@ export function CalendarView() {
                               <Flag className={cn("w-4 h-4", p.color, calendarPriority === p.value ? "fill-current" : "")} />
                             </button>
                           ))}
+                        </div>
+                      </div>
+
+                      {/* Repeat */}
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+                          <Repeat className="w-3.5 h-3.5" /> Repeat
+                        </div>
+                        <div className="flex-1 space-y-3 pt-2">
+                          <select
+                            value={calendarRecurrence}
+                            onChange={(e) => {
+                              setCalendarRecurrence(e.target.value);
+                              if (e.target.value !== 'weekly') setCalendarRecurrenceDays([]);
+                            }}
+                            className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+                          >
+                            <option value="none">None</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly...</option>
+                            <option value="monthly">Monthly</option>
+                          </select>
+                          
+                          {calendarRecurrence === 'weekly' && (
+                            <div className="flex gap-2 pb-2">
+                              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
+                                const isSelected = calendarRecurrenceDays.includes(idx);
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      setCalendarRecurrenceDays(prev => 
+                                        prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]
+                                      );
+                                    }}
+                                    className={cn(
+                                      "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
+                                      isSelected 
+                                        ? "bg-primary text-on-primary shadow-sm" 
+                                        : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
+                                    )}
+                                  >
+                                    {day}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 

@@ -41,6 +41,7 @@ export function RightPane() {
       reminderAt: null,
       status: 'todo' as const,
       userId: user.id,
+      recurrence: null,
     };
 
     useStore.getState().addTask(newSubtask);
@@ -135,7 +136,7 @@ export function RightPane() {
             <div className="w-28 text-outline/70 flex items-center gap-2.5 pt-1.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
               <CalendarIcon className="w-3.5 h-3.5" /> Schedule
             </div>
-            <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex-1 min-w-0">
               <DateTimePicker
                 startDate={task.startDate ? new Date(task.startDate) : null}
                 endDate={task.endDate ? new Date(task.endDate) : null}
@@ -234,6 +235,21 @@ export function RightPane() {
           </div>
         </div>
 
+        {/* Description / Context & Notes */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 text-[9px] font-label font-bold tracking-[0.2em] uppercase text-outline/70 px-2">
+            <AlignLeft className="w-4 h-4 text-primary/60" />
+            <span>Context & Notes</span>
+          </div>
+          <div className="bg-white rounded-2xl border border-outline-variant/10 overflow-hidden shadow-sm">
+            <RichTextEditor 
+              content={description}
+              onChange={setDescription}
+              onBlur={handleDescriptionBlur}
+            />
+          </div>
+        </div>
+
         {/* Subtasks */}
         <div className="space-y-6">
           <div className="flex items-center gap-3 text-[9px] font-label font-bold tracking-[0.2em] uppercase text-outline/70 px-2">
@@ -282,21 +298,6 @@ export function RightPane() {
               className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm font-body placeholder:text-outline/40"
             />
           </form>
-        </div>
-
-        {/* Description */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-3 text-[9px] font-label font-bold tracking-[0.2em] uppercase text-outline/70 px-2">
-            <AlignLeft className="w-4 h-4 text-primary/60" />
-            <span>Context & Notes</span>
-          </div>
-          <div className="bg-white rounded-2xl border border-outline-variant/10 overflow-hidden shadow-sm">
-            <RichTextEditor 
-              content={description}
-              onChange={setDescription}
-              onBlur={handleDescriptionBlur}
-            />
-          </div>
         </div>
       </div>
 

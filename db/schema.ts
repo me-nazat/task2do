@@ -33,6 +33,7 @@ export const tasks = sqliteTable('tasks', {
   status: text('status').default('todo'), // 'todo', 'in-progress', 'done'
   quadrant: text('quadrant'), // 'urgent-important', 'not-urgent-important', 'urgent-not-important', 'not-urgent-not-important'
   parentId: text('parent_id'), // Self-referencing for subtasks
+  recurrence: text('recurrence'), // e.g., 'daily', 'weekly', etc.
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });

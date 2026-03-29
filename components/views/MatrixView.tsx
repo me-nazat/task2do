@@ -54,6 +54,7 @@ export function MatrixView() {
       parentId: null,
       timezone: null,
       reminderAt: null,
+      recurrence: null,
       status: 'todo' as const,
       userId: user.id,
     };

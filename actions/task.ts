@@ -15,7 +15,7 @@ export async function getTasks(userId: string) {
   }
 }
 
-export async function createTask(data: { title: string; listId?: string; startDate?: Date; endDate?: Date; isAllDay?: boolean; parentId?: string; quadrant?: string; priority?: number; status?: string; reminderAt?: Date; userId: string }) {
+export async function createTask(data: { title: string; listId?: string; startDate?: Date; endDate?: Date; isAllDay?: boolean; parentId?: string; quadrant?: string; priority?: number; status?: string; reminderAt?: Date; userId: string; recurrence?: string }) {
   try {
     const id = uuidv4();
     const { userId, ...taskData } = data;
@@ -48,6 +48,7 @@ export async function createTask(data: { title: string; listId?: string; startDa
       priority: data.priority ?? 0,
       status: (data.status as any) || 'todo',
       reminderAt: data.reminderAt || null,
+      recurrence: data.recurrence || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

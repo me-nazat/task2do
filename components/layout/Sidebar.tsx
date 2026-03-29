@@ -60,7 +60,7 @@ export function Sidebar() {
     { id: 'upcoming', label: 'Upcoming', icon: Star, view: 'upcoming' },
     { id: 'ai-chat', label: 'AI Chat', icon: Sparkles, view: 'ai-chat' },
     { id: 'calendar', label: 'Schedule', icon: Calendar, view: 'calendar' },
-    { id: 'kanban', label: 'Kanban Board', icon: LayoutDashboard, view: 'kanban' },
+    { id: 'kanban', label: 'Kanban', icon: LayoutDashboard, view: 'kanban' },
     { id: 'matrix', label: 'Matrix', icon: LayoutDashboard, view: 'matrix' },
     { id: 'habits', label: 'Habits', icon: CheckSquare, view: 'habits' },
     { id: 'completed-reminders', label: 'Completed & Alerts', icon: CircleCheckBig, view: 'completed-reminders' },

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
-import { Plus, CheckCircle2, Calendar as CalendarIcon, Tag, ChevronDown, Bell, Flag, LayoutDashboard, X, AlignLeft, Clock, AlertTriangle } from 'lucide-react';
+import { Plus, CheckCircle2, Calendar as CalendarIcon, Tag, ChevronDown, Bell, Flag, LayoutDashboard, X, AlignLeft, Clock, AlertTriangle, Repeat } from 'lucide-react';
 import { createTask, updateTask } from '@/actions/task';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, isAfter, isSameDay, isBefore, addDays, addMonths, addWeeks, isWithinInterval } from 'date-fns';
@@ -14,6 +14,7 @@ import { CalendarView } from '@/components/views/CalendarView';
 import { HabitTrackerView } from '@/components/views/HabitTrackerView';
 import { AIChatView } from '@/components/views/AIChatView';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
+import { AlertBanner } from '@/components/ui/AlertBanner';
 
 // Animation presets for consistent, smooth micro-interactions
 const viewTransition = {
@@ -61,6 +62,8 @@ export function MainContent() {
   const [modalIsAllDay, setModalIsAllDay] = useState<boolean>(false);
   const [modalTimezone, setModalTimezone] = useState<string | null>(null);
   const [modalReminderAt, setModalReminderAt] = useState<Date | null>(null);
+  const [modalRecurrence, setModalRecurrence] = useState<string>('none');
+  const [modalRecurrenceDays, setModalRecurrenceDays] = useState<number[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const modalInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +85,8 @@ export function MainContent() {
     setModalIsAllDay(false);
     setModalTimezone(null);
     setModalReminderAt(null);
+    setModalRecurrence('none');
+    setModalRecurrenceDays([]);
   }, []);
 
   // Context-aware modal opening
@@ -128,6 +133,9 @@ export function MainContent() {
       parentId: null,
       timezone: modalTimezone,
       reminderAt: modalReminderAt,
+      recurrence: modalRecurrence === 'weekly' && modalRecurrenceDays.length > 0 
+        ? `weekly:${modalRecurrenceDays.join(',')}` 
+        : modalRecurrence === 'none' ? null : modalRecurrence,
       status: modalStatus as 'todo' | 'in-progress' | 'done',
     };
     addTask(newTask);
@@ -143,6 +151,9 @@ export function MainContent() {
         priority: modalPriority,
         status: modalStatus,
         quadrant: modalQuadrant || undefined,
+        recurrence: modalRecurrence === 'weekly' && modalRecurrenceDays.length > 0 
+          ? `weekly:${modalRecurrenceDays.join(',')}` 
+          : modalRecurrence === 'none' ? undefined : modalRecurrence,
       });
       updateTaskState(tempId, { id });
     } catch (error) {
@@ -352,29 +363,12 @@ export function MainContent() {
 
                 {/* Inbox Reminders / Urgency Box — Only on Inbox view */}
                 {isInboxView && inboxAlertTasks.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1, type: 'spring', damping: 25, stiffness: 300 }}
-                    className="relative overflow-hidden rounded-2xl border border-red-200/40 bg-gradient-to-br from-red-50/80 via-amber-50/40 to-orange-50/30 shadow-lg"
+                  <AlertBanner
+                    title="Attention Required"
+                    subtitle={`${inboxAlertTasks.length} ${inboxAlertTasks.length === 1 ? 'item needs' : 'items need'} your attention`}
+                    icon={AlertTriangle}
+                    colorScheme="red"
                   >
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-red-200/20 to-transparent rounded-full blur-3xl" />
-                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-amber-200/20 to-transparent rounded-full blur-2xl" />
-                    
-                    <div className="relative p-8">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-amber-500 flex items-center justify-center shadow-md">
-                          <AlertTriangle className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-headline font-medium text-xl tracking-tight text-red-900 italic">Attention Required</h3>
-                          <p className="text-[8px] font-label font-bold tracking-[0.25em] uppercase text-red-600/70">
-                            {inboxAlertTasks.length} {inboxAlertTasks.length === 1 ? 'item needs' : 'items need'} your attention
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2.5">
                         {inboxAlertTasks.map((task, index) => {
                           const urgency = getUrgencyLabel(task);
                           return (
@@ -414,34 +408,17 @@ export function MainContent() {
                             </motion.div>
                           );
                         })}
-                      </div>
-                    </div>
-                  </motion.div>
+                  </AlertBanner>
                 )}
 
                 {/* Reminders Section — for non-Inbox views */}
                 {!isInboxView && reminderTasks.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1, type: 'spring', damping: 25, stiffness: 300 }}
-                    className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-orange-50/50 to-yellow-50/30 shadow-lg"
+                  <AlertBanner
+                    title="Reminders"
+                    subtitle={`${reminderTasks.length} pending ${reminderTasks.length === 1 ? 'alert' : 'alerts'}`}
+                    icon={Bell}
+                    colorScheme="amber"
                   >
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-amber-200/30 to-transparent rounded-full blur-3xl" />
-                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-orange-200/20 to-transparent rounded-full blur-2xl" />
-                    
-                    <div className="relative p-8">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
-                          <Bell className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-headline font-medium text-xl tracking-tight text-amber-900 italic">Reminders</h3>
-                          <p className="text-[8px] font-label font-bold tracking-[0.25em] uppercase text-amber-600/70">{reminderTasks.length} pending {reminderTasks.length === 1 ? 'alert' : 'alerts'}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2.5">
                         {reminderTasks.map((task, index) => (
                           <motion.div
                             key={task.id}
@@ -467,9 +444,7 @@ export function MainContent() {
                             </div>
                           </motion.div>
                         ))}
-                      </div>
-                    </div>
-                  </motion.div>
+                  </AlertBanner>
                 )}
 
                 <div className="group-container">
@@ -634,26 +609,24 @@ export function MainContent() {
             {/* Completed & Reminders View */}
             {currentView === 'completed-reminders' && (
               <motion.div key="view-completed" {...viewTransition} className="space-y-16">
+                {/* Success Banner */}
+                <div className="mb-6">
+                  <AlertBanner
+                    title="Success Summary"
+                    subtitle={`${tasks.filter(t => t.isCompleted).length} total objectives completed`}
+                    icon={CheckCircle2}
+                    colorScheme="green"
+                  />
+                </div>
+
                 {/* Active Reminders Section */}
                 {reminderTasks.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-orange-50/50 to-yellow-50/30 shadow-lg"
+                  <AlertBanner
+                    title="Active Alerts"
+                    subtitle={`${reminderTasks.length} pending`}
+                    icon={Bell}
+                    colorScheme="amber"
                   >
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-amber-200/30 to-transparent rounded-full blur-3xl" />
-                    <div className="relative p-8">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
-                          <Bell className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-headline font-medium text-xl tracking-tight text-amber-900 italic">Active Alerts</h3>
-                          <p className="text-[8px] font-label font-bold tracking-[0.25em] uppercase text-amber-600/70">{reminderTasks.length} pending</p>
-                        </div>
-                      </div>
-                      <div className="space-y-2.5">
                         {reminderTasks.map((task, index) => (
                           <motion.div
                             key={task.id}
@@ -679,9 +652,7 @@ export function MainContent() {
                             </div>
                           </motion.div>
                         ))}
-                      </div>
-                    </div>
-                  </motion.div>
+                  </AlertBanner>
                 )}
 
                 {/* Completed Tasks Section */}
@@ -860,6 +831,54 @@ export function MainContent() {
                         setModalReminderAt(updates.reminderAt);
                       }}
                     />
+                  </div>
+                </div>
+
+                {/* Repeat */}
+                <div className="flex items-start gap-6 text-sm">
+                  <div className="w-28 text-outline/70 flex items-center gap-2.5 pt-1.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+                    <Repeat className="w-3.5 h-3.5" /> Repeat
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-3">
+                    <select
+                      value={modalRecurrence}
+                      onChange={(e) => {
+                        setModalRecurrence(e.target.value);
+                        if (e.target.value !== 'weekly') setModalRecurrenceDays([]);
+                      }}
+                      className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+                    >
+                      <option value="none">None</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly...</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                    
+                    {modalRecurrence === 'weekly' && (
+                      <div className="flex gap-2">
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
+                          const isSelected = modalRecurrenceDays.includes(idx);
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                setModalRecurrenceDays(prev => 
+                                  prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]
+                                );
+                              }}
+                              className={cn(
+                                "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
+                                isSelected 
+                                  ? "bg-primary text-on-primary shadow-sm" 
+                                  : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
+                              )}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 

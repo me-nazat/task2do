@@ -17,6 +17,7 @@ export interface Task {
   timezone: string | null;
   reminderAt: Date | null;
   status: 'todo' | 'in-progress' | 'done' | null;
+  recurrence: string | null;
 }
 
 export interface List {
