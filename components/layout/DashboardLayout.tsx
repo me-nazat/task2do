@@ -15,31 +15,40 @@ import { usePathname } from 'next/navigation';
 
 export function DashboardLayout() {
   const pathname = usePathname();
-  const { isSidebarOpen, isRightPaneOpen, toggleSidebar, isCollapsed, setTasks, setLists, selectedTaskId, user, isAuthReady, setCurrentView, setSelectedListId } = useStore();
+  const { isSidebarOpen, isRightPaneOpen, toggleSidebar, isCollapsed, setTasks, setLists, selectedTaskId, user, isAuthReady, setCurrentView, setSelectedListId, tasks, lists } = useStore();
 
+  // Fetch data only when auth is ready, user exists, and we don't already have cached data
   useEffect(() => {
     if (isAuthReady && user) {
-      getTasks(user.id)
-        .then((tasks) => {
-          setTasks(tasks as Task[]);
-        })
-        .catch((error) => {
-          console.error('Failed to get tasks', error);
-          setTasks([]);
-        });
-      getLists(user.id)
-        .then((lists) => {
-          setLists(lists as List[]);
-        })
-        .catch((error) => {
-          console.error('Failed to get lists', error);
-          setLists([]);
-        });
+      // Only fetch tasks if we don't already have them cached
+      if (tasks.length === 0) {
+        getTasks(user.id)
+          .then((fetchedTasks) => {
+            setTasks(fetchedTasks as Task[]);
+          })
+          .catch((error) => {
+            console.error('Failed to get tasks', error);
+            setTasks([]);
+          });
+      }
+      
+      // Only fetch lists if we don't already have them cached
+      if (lists.length === 0) {
+        getLists(user.id)
+          .then((fetchedLists) => {
+            setLists(fetchedLists as List[]);
+          })
+          .catch((error) => {
+            console.error('Failed to get lists', error);
+            setLists([]);
+          });
+      }
     } else if (isAuthReady && !user) {
+      // Clear data when user logs out
       setTasks([]);
       setLists([]);
     }
-  }, [setTasks, setLists, user, isAuthReady]);
+  }, [setTasks, setLists, user, isAuthReady, tasks.length, lists.length]);
 
   useEffect(() => {
     const parts = pathname.split('/').filter(Boolean);

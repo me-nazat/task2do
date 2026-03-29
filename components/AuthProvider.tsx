@@ -4,12 +4,20 @@ import { useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { setUser, setAuthReady } = useStore();
+  const { setUser, setAuthReady, user } = useStore();
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
+    // Skip if we already have a user and auth is ready
+    if (user && setAuthReady) {
+      setAuthReady(true);
+      return;
+    }
+
+    const checkAuthStatus = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        const data = await res.json();
+        
         if (data.user) {
           setUser({
             id: data.user.id,
@@ -20,12 +28,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         }
         setAuthReady(true);
-      })
-      .catch(() => {
+      } catch (error) {
+        console.error('Auth check failed:', error);
         setUser(null);
         setAuthReady(true);
-      });
-  }, [setUser, setAuthReady]);
+      }
+    };
+
+    checkAuthStatus();
+  }, [setUser, setAuthReady, user]);
 
   return <>{children}</>;
 }
