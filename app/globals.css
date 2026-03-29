@@ -94,3 +94,18 @@
 .task2do-shadow {
   box-shadow: 0 20px 40px 0 rgba(26, 28, 28, 0.04);
 }
+
+/* Ensure rich text editor content is always legible */
+.ProseMirror {
+  color: #1a1a1a !important;
+}
+.ProseMirror p,
+.ProseMirror li,
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  color: #1a1a1a;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: rgba(26, 26, 26, 0.35);
+}

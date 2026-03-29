@@ -30,7 +30,7 @@ export function RichTextEditor({ content, onChange, onBlur }: RichTextEditorProp
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[150px] p-4',
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[150px] p-4 text-[#1a1a1a] prose-p:text-[#1a1a1a] prose-li:text-[#1a1a1a]',
       },
     },
   });
@@ -101,7 +101,7 @@ export function RichTextEditor({ content, onChange, onBlur }: RichTextEditorProp
           <ListOrdered className="w-4 h-4" />
         </button>
       </div>
-      <EditorContent editor={editor} className="text-[15px] leading-relaxed text-foreground/90" />
+      <EditorContent editor={editor} className="text-[15px] leading-relaxed [&_.ProseMirror]:text-[#1a1a1a] [&_.ProseMirror_p]:text-[#1a1a1a]" />
     </div>
   );
 }

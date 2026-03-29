@@ -17,7 +17,7 @@ import {
   startOfDay,
   endOfDay
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Calendar as CalendarIcon, Tag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Calendar as CalendarIcon, Tag, ChevronDown, Flag, LayoutDashboard, AlignLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
@@ -29,6 +29,21 @@ export function CalendarView() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Expandable details state
+  const [showDetails, setShowDetails] = useState(false);
+  const [calendarPriority, setCalendarPriority] = useState<number>(0);
+  const [calendarQuadrant, setCalendarQuadrant] = useState<string | null>(null);
+  const [calendarStatus, setCalendarStatus] = useState<'todo' | 'in-progress' | 'done'>('todo');
+  const [calendarDescription, setCalendarDescription] = useState('');
+
+  const resetDetails = () => {
+    setShowDetails(false);
+    setCalendarPriority(0);
+    setCalendarQuadrant(null);
+    setCalendarStatus('todo');
+    setCalendarDescription('');
+  };
+
   const handleAddTask = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskTitle.trim() && user && selectedDate) {
       const title = newTaskTitle.trim();
@@ -38,27 +53,38 @@ export function CalendarView() {
       const newTask: Task = {
         id: tempId,
         title,
-        isCompleted: false,
-        priority: 0,
+        isCompleted: calendarStatus === 'done',
+        priority: showDetails ? calendarPriority : 0,
         startDate: selectedDate,
         endDate: null,
         isAllDay: false,
         listId: null,
-        description: null,
-        quadrant: null,
+        description: showDetails ? (calendarDescription || null) : null,
+        quadrant: showDetails ? calendarQuadrant : null,
         parentId: null,
         timezone: null,
         reminderAt: null,
-        status: 'todo',
+        status: showDetails ? calendarStatus : 'todo',
       };
       addTask(newTask);
 
       try {
-        const id = await createTask({ title, startDate: selectedDate, userId: user.id });
+        const id = await createTask({
+          title,
+          startDate: selectedDate,
+          userId: user.id,
+          priority: showDetails ? calendarPriority : undefined,
+          quadrant: showDetails && calendarQuadrant ? calendarQuadrant : undefined,
+          status: showDetails ? calendarStatus : undefined,
+        });
         updateTaskState(tempId, { id });
       } catch (error) {
         console.error('Failed to create task', error);
         deleteTask(tempId);
+      }
+
+      if (showDetails) {
+        resetDetails();
       }
     }
   };
@@ -139,7 +165,7 @@ export function CalendarView() {
           return (
             <div 
               key={day.toString()}
-              onClick={() => setSelectedDate(day)}
+              onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
               className={cn(
                 "min-h-[160px] p-4 border-r border-b border-outline-variant/10 flex flex-col gap-3 transition-all hover:bg-primary/[0.02] cursor-pointer",
                 !isCurrentMonth && "bg-primary/[0.01] opacity-30",
@@ -189,7 +215,7 @@ export function CalendarView() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/10 backdrop-blur-[8px]"
-            onClick={() => setSelectedDate(null)}
+            onClick={() => { setSelectedDate(null); resetDetails(); }}
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
@@ -211,7 +237,7 @@ export function CalendarView() {
                     </p>
                   </div>
                   <button 
-                    onClick={() => setSelectedDate(null)}
+                    onClick={() => { setSelectedDate(null); resetDetails(); }}
                     className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors text-outline cursor-pointer"
                   >
                     ×
@@ -238,7 +264,127 @@ export function CalendarView() {
                     <Tag className="w-5 h-5 text-outline/40 cursor-pointer hover:text-primary transition-colors" />
                   </div>
                 </div>
+
+                {/* Add Details Toggle */}
+                <button
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="flex items-center gap-2 mt-4 px-4 py-2 text-[10px] font-label font-bold tracking-[0.15em] uppercase text-primary/60 hover:text-primary hover:bg-primary/5 rounded-full transition-all duration-200"
+                >
+                  <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", showDetails && "rotate-180")} />
+                  {showDetails ? 'Hide Details' : 'Add Details'}
+                </button>
               </div>
+
+              {/* Expandable Details Section */}
+              <AnimatePresence>
+                {showDetails && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                    className="overflow-hidden border-b border-outline-variant/10"
+                  >
+                    <div className="p-8 space-y-6 bg-surface-container-lowest/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[9px] font-label font-bold tracking-[0.25em] uppercase text-outline/50">Task Details</span>
+                        <div className="flex-1 h-px bg-outline-variant/20" />
+                      </div>
+
+                      {/* Priority */}
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+                          <Flag className="w-3.5 h-3.5" /> Priority
+                        </div>
+                        <div className="flex-1 flex items-center gap-3">
+                          {[
+                            { value: 0, label: 'None', color: 'text-outline/40' },
+                            { value: 1, label: 'Low', color: 'text-blue-500' },
+                            { value: 2, label: 'Medium', color: 'text-amber-500' },
+                            { value: 3, label: 'High', color: 'text-red-500' },
+                          ].map((p) => (
+                            <button
+                              key={p.value}
+                              onClick={() => setCalendarPriority(p.value)}
+                              className={cn(
+                                "p-2.5 rounded-full transition-all duration-200 hover:bg-surface-container-low active:scale-90",
+                                calendarPriority === p.value ? "bg-surface-container-high shadow-sm scale-110" : ""
+                              )}
+                              title={p.label}
+                            >
+                              <Flag className={cn("w-4 h-4", p.color, calendarPriority === p.value ? "fill-current" : "")} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Status */}
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Status
+                        </div>
+                        <div className="flex-1">
+                          <select
+                            value={calendarStatus}
+                            onChange={(e) => setCalendarStatus(e.target.value as any)}
+                            className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+                          >
+                            <option value="todo">To Do</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="done">Done</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Quadrant */}
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+                          <LayoutDashboard className="w-3.5 h-3.5" /> Quadrant
+                        </div>
+                        <div className="flex-1">
+                          <select
+                            value={calendarQuadrant || 'none'}
+                            onChange={(e) => setCalendarQuadrant(e.target.value === 'none' ? null : e.target.value)}
+                            className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+                          >
+                            <option value="none">None</option>
+                            <option value="urgent-important">Urgent & Important</option>
+                            <option value="not-urgent-important">Not Urgent & Important</option>
+                            <option value="urgent-not-important">Urgent & Not Important</option>
+                            <option value="not-urgent-not-important">Not Urgent & Not Important</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Tags */}
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+                          <Tag className="w-3.5 h-3.5" /> Tags
+                        </div>
+                        <div className="flex-1 px-4 py-2.5 hover:bg-surface-container-low rounded-lg cursor-pointer transition-all duration-200 text-outline/50 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
+                          Add identifiers...
+                        </div>
+                      </div>
+
+                      {/* Notes */}
+                      <div className="flex items-start gap-6 text-sm">
+                        <div className="w-28 text-outline/70 flex items-center gap-2.5 pt-2 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+                          <AlignLeft className="w-3.5 h-3.5" /> Notes
+                        </div>
+                        <div className="flex-1">
+                          <textarea
+                            value={calendarDescription}
+                            onChange={(e) => setCalendarDescription(e.target.value)}
+                            placeholder="Add context, details, or notes..."
+                            rows={3}
+                            className="w-full bg-surface-container-low/50 hover:bg-surface-container-high/50 border border-outline-variant/10 focus:border-primary/20 rounded-xl px-5 py-4 font-body text-[14px] leading-relaxed placeholder:text-outline/30 transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-primary/10 resize-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Tasks for the date */}
               <div className="p-8 overflow-y-auto space-y-3 bg-surface-container-lowest/30">

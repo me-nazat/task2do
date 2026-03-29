@@ -9,7 +9,7 @@ export async function GET() {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    return NextResponse.json({ user: { id: decoded.userId, email: decoded.email } });
+    return NextResponse.json({ user: { id: decoded.userId, email: decoded.email, name: decoded.name || null } });
   } catch (err) {
     return NextResponse.json({ user: null });
   }

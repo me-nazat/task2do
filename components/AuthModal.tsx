@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Modal } from './ui/Modal';
+import { useStore } from '@/store/useStore';
 
 export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -10,6 +11,9 @@ export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const { setUser, setAuthReady } = useStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +23,8 @@ export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
       setError('Passwords do not match');
       return;
     }
+
+    setIsLoading(true);
 
     try {
       const endpoint = isSignUp ? '/api/auth/signup' : '/api/auth/login';
@@ -32,13 +38,21 @@ export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
       if (!response.ok) throw new Error(data.error);
 
       if (!isSignUp) {
-        window.location.reload();
+        // Update Zustand state directly — no page reload needed
+        setUser({
+          id: data.user.id,
+          email: data.user.email,
+          displayName: data.user.name,
+        });
+        setAuthReady(true);
       } else {
         setIsSignUp(false);
       }
       onClose();
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -82,8 +96,18 @@ export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
           />
         )}
         {error && <p className="text-red-500 text-sm">{error}</p>}
-        <button type="submit" className="w-full p-2 bg-primary text-white rounded">
-          {isSignUp ? 'Sign Up' : 'Sign In'}
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full p-2 bg-primary text-white rounded disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {isLoading && (
+            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          )}
+          {isLoading ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Sign In'}
         </button>
         <button
           type="button"

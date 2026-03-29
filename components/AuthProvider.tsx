@@ -20,6 +20,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         }
         setAuthReady(true);
+      })
+      .catch(() => {
+        setUser(null);
+        setAuthReady(true);
       });
   }, [setUser, setAuthReady]);
 

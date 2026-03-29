@@ -25,9 +25,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET!, { expiresIn: '1h' });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, name: user.name },
+      process.env.JWT_SECRET!,
+      { expiresIn: '30d' }
+    );
 
-    (await cookies()).set('token', token, { httpOnly: true, secure: true });
+    (await cookies()).set('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60,
+      path: '/',
+    });
 
     return NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } });
   } catch (err: any) {
