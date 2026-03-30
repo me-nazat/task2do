@@ -157,29 +157,29 @@ export function DateTimePicker({
 
         {/* Time Selection (only if not all day) */}
         {!isAllDay && date && (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-primary/5 hover:bg-primary/10 px-4 py-2.5 rounded-full border border-primary/5 transition-all text-primary overflow-hidden">
-              <Clock className="w-4 h-4 text-primary/60 shrink-0" />
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 bg-primary/5 hover:bg-primary/10 px-3 py-2 rounded-full border border-primary/5 transition-all text-primary overflow-hidden">
+              <Clock className="w-3.5 h-3.5 text-primary/60 shrink-0" />
               <select
                 value={startTime}
                 onChange={(e) => {
                   setStartTime(e.target.value);
                   updateDates(date, e.target.value, endTime, false, reminderOffset);
                 }}
-                className="bg-transparent border-none focus:outline-none text-[13px] font-body font-medium cursor-pointer appearance-none pr-1"
+                className="bg-transparent border-none focus:outline-none text-[12px] font-body font-medium cursor-pointer appearance-none pr-0.5"
               >
                 {timeOptions.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
-              <span className="text-primary/30 mx-1 shrink-0">/</span>
+              <span className="text-primary/30 shrink-0">/</span>
               <select
                 value={endTime}
                 onChange={(e) => {
                   setEndTime(e.target.value);
                   updateDates(date, startTime, e.target.value, false, reminderOffset);
                 }}
-                className="bg-transparent border-none focus:outline-none text-[13px] font-body font-medium cursor-pointer appearance-none pr-1"
+                className="bg-transparent border-none focus:outline-none text-[12px] font-body font-medium cursor-pointer appearance-none pr-0.5"
               >
                 {timeOptions.map((t) => (
                   <option key={t} value={t}>{t}</option>
@@ -191,14 +191,14 @@ export function DateTimePicker({
 
         {/* Timezone */}
         {!isAllDay && date && (
-          <div className="flex items-center gap-2 bg-primary/5 hover:bg-primary/10 px-4 py-2.5 rounded-full border border-primary/5 transition-all text-primary overflow-hidden">
-            <Globe className="w-4 h-4 text-primary/60 shrink-0" />
+          <div className="flex items-center gap-1.5 bg-primary/5 hover:bg-primary/10 px-3 py-2 rounded-full border border-primary/5 transition-all text-primary overflow-hidden">
+            <Globe className="w-3.5 h-3.5 text-primary/60 shrink-0" />
             <select
               value={timezone || 'UTC'}
               onChange={(e) => {
                 onChange({ startDate, endDate, isAllDay, timezone: e.target.value, reminderAt });
               }}
-              className="bg-transparent border-none focus:outline-none text-[13px] font-body font-medium cursor-pointer max-w-[100px] truncate appearance-none pr-1"
+              className="bg-transparent border-none focus:outline-none text-[12px] font-body font-medium cursor-pointer max-w-[80px] truncate appearance-none pr-0.5"
             >
               {timezones.map((tz) => (
                 <option key={tz} value={tz}>{tz}</option>
@@ -209,8 +209,8 @@ export function DateTimePicker({
 
         {/* Reminder */}
         {date && (
-          <div className="flex items-center gap-2 bg-primary/5 hover:bg-primary/10 px-4 py-2.5 rounded-full border border-primary/5 transition-all text-primary overflow-hidden">
-            <Bell className="w-4 h-4 text-primary/60 shrink-0" />
+          <div className="flex items-center gap-1.5 bg-primary/5 hover:bg-primary/10 px-3 py-2 rounded-full border border-primary/5 transition-all text-primary overflow-hidden">
+            <Bell className="w-3.5 h-3.5 text-primary/60 shrink-0" />
             <select
               value={reminderOffset === null ? 'null' : reminderOffset.toString()}
               onChange={(e) => {

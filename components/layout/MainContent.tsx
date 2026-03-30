@@ -134,8 +134,8 @@ export function MainContent() {
       parentId: null,
       timezone: modalTimezone,
       reminderAt: modalReminderAt,
-      recurrence: modalRecurrence === 'weekly' && modalRecurrenceDays.length > 0 
-        ? `weekly:${modalRecurrenceDays.join(',')}` 
+      recurrence: (modalRecurrence === 'weekly' || modalRecurrence === 'custom') && modalRecurrenceDays.length > 0 
+        ? `${modalRecurrence}:${modalRecurrenceDays.join(',')}` 
         : modalRecurrence === 'none' ? null : modalRecurrence,
       status: modalStatus as 'todo' | 'in-progress' | 'done',
     };
@@ -152,8 +152,8 @@ export function MainContent() {
         priority: modalPriority,
         status: modalStatus,
         quadrant: modalQuadrant || undefined,
-        recurrence: modalRecurrence === 'weekly' && modalRecurrenceDays.length > 0 
-          ? `weekly:${modalRecurrenceDays.join(',')}` 
+        recurrence: (modalRecurrence === 'weekly' || modalRecurrence === 'custom') && modalRecurrenceDays.length > 0 
+          ? `${modalRecurrence}:${modalRecurrenceDays.join(',')}` 
           : modalRecurrence === 'none' ? undefined : modalRecurrence,
       }));
       updateTaskState(tempId, { id });
@@ -853,33 +853,56 @@ export function MainContent() {
                     >
                       <option value="none">None</option>
                       <option value="daily">Daily</option>
-                      <option value="weekly">Weekly...</option>
+                      <option value="weekly">Weekly</option>
                       <option value="monthly">Monthly</option>
+                      <option value="custom">Custom...</option>
                     </select>
                     
+                    {modalRecurrence === 'custom' && (
+                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex flex-col gap-3">
+                          <span className="text-[8px] font-label font-bold tracking-[0.1em] uppercase text-outline/40">Select Occurrence Days</span>
+                          <div className="flex gap-2">
+                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
+                              const isSelected = modalRecurrenceDays.includes(idx);
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => {
+                                    setModalRecurrenceDays(prev => 
+                                      prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]
+                                    );
+                                  }}
+                                  className={cn(
+                                    "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
+                                    isSelected 
+                                      ? "bg-primary text-on-primary shadow-sm" 
+                                      : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
+                                  )}
+                                >
+                                  {day}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="bg-primary/5 p-3 rounded-xl border border-primary/10 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <CalendarIcon className="w-3 h-3 text-primary/40" />
+                                <span className="text-[9px] font-label font-bold tracking-[0.05em] uppercase text-primary/60">Starting Date</span>
+                            </div>
+                            <span className="text-[10px] font-body font-medium text-primary">
+                                {modalStartDate ? format(modalStartDate, 'MMMM d, yyyy') : 'No date set'}
+                            </span>
+                        </div>
+                      </div>
+                    )}
+
                     {modalRecurrence === 'weekly' && (
-                      <div className="flex gap-2">
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
-                          const isSelected = modalRecurrenceDays.includes(idx);
-                          return (
-                            <button
-                              key={idx}
-                              onClick={() => {
-                                setModalRecurrenceDays(prev => 
-                                  prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]
-                                );
-                              }}
-                              className={cn(
-                                "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
-                                isSelected 
-                                  ? "bg-primary text-on-primary shadow-sm" 
-                                  : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
-                              )}
-                            >
-                              {day}
-                            </button>
-                          );
-                        })}
+                      <div className="text-[9px] font-label font-bold tracking-[0.1em] uppercase text-outline/40 py-1 flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-primary/40" />
+                        Repeats every week on {modalStartDate ? format(modalStartDate, 'EEEE') : 'scheduled day'}
                       </div>
                     )}
                   </div>

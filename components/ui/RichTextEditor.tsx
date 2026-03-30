@@ -30,7 +30,7 @@ export function RichTextEditor({ content, onChange, onBlur }: RichTextEditorProp
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[150px] p-4 text-[#1a1a1a] prose-p:text-[#1a1a1a] prose-li:text-[#1a1a1a]',
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[120px] p-3 text-[#1a1a1a] prose-p:text-[#1a1a1a] prose-li:text-[#1a1a1a]',
       },
     },
   });
@@ -48,7 +48,7 @@ export function RichTextEditor({ content, onChange, onBlur }: RichTextEditorProp
 
   return (
     <div className="w-full rounded-2xl border border-border/40 bg-muted/10 focus-within:bg-background focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 transition-all duration-300 overflow-hidden">
-      <div className="flex items-center gap-1 border-b border-border/40 p-2 bg-muted/20">
+      <div className="flex items-center gap-0.5 border-b border-border/40 p-1.5 bg-muted/20">
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={cn(

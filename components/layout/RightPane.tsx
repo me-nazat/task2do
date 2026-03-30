@@ -132,7 +132,7 @@ export function RightPane() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-10 space-y-16">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-10 space-y-12">
         {/* Title */}
         <div>
           <input 
@@ -148,7 +148,7 @@ export function RightPane() {
         {/* Properties */}
         <div className="space-y-8 bg-white p-8 rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
           <div className="flex items-start gap-6 text-sm">
-            <div className="w-28 text-outline/70 flex items-center gap-2.5 pt-1.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
+            <div className="w-24 text-outline/70 flex items-center gap-2.5 pt-1.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase outline-none shrink-0">
               <CalendarIcon className="w-3.5 h-3.5" /> Schedule
             </div>
             <div className="flex-1 min-w-0">
@@ -171,7 +171,7 @@ export function RightPane() {
           </div>
 
           <div className="flex items-center gap-6 text-sm">
-            <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
+            <div className="w-24 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
               <CheckCircle2 className="w-3.5 h-3.5" /> Status
             </div>
             <div className="flex-1 min-w-0">
@@ -197,7 +197,7 @@ export function RightPane() {
           </div>
 
           <div className="flex items-center gap-6 text-sm">
-            <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
+            <div className="w-24 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
               <Flag className="w-3.5 h-3.5" /> Priority
             </div>
             <div className="flex-1 flex items-center gap-3">
@@ -230,7 +230,7 @@ export function RightPane() {
           </div>
 
           <div className="flex items-center gap-6 text-sm">
-            <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
+            <div className="w-24 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
               <LayoutDashboard className="w-3.5 h-3.5" /> Quadrant
             </div>
             <div className="flex-1 min-w-0">
@@ -257,7 +257,7 @@ export function RightPane() {
           </div>
 
           <div className="flex items-center gap-6 text-sm">
-            <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
+            <div className="w-24 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
               <Tag className="w-3.5 h-3.5" /> Tags
             </div>
             <div className="flex-1 px-4 py-2.5 hover:bg-surface-container-low rounded-lg cursor-pointer transition-all text-outline/50 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
@@ -267,7 +267,7 @@ export function RightPane() {
         </div>
 
         {/* Description / Context & Notes */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex items-center gap-3 text-[9px] font-label font-bold tracking-[0.2em] uppercase text-outline/70 px-2">
             <AlignLeft className="w-4 h-4 text-primary/60" />
             <span>Context & Notes</span>
