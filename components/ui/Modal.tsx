@@ -10,14 +10,18 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  contentClassName?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, contentClassName }: ModalProps) {
   return (
     <Dialog.Root open={isOpen} onOpenChange={onClose}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-300" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-3xl shadow-2xl z-50 p-8 animate-in zoom-in-95 slide-in-from-bottom-10 duration-300">
+        <Dialog.Content className={cn(
+          "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-3xl shadow-2xl z-50 p-8 animate-in zoom-in-95 slide-in-from-bottom-10 duration-300",
+          contentClassName
+        )}>
           <div className="flex items-center justify-between mb-8">
             <Dialog.Title className="text-2xl font-headline font-medium italic text-primary">
               {title}

@@ -23,8 +23,12 @@ export function DashboardLayout() {
   // Fetch data only when auth is ready, user exists, and we don't already have cached data
   useEffect(() => {
     if (isAuthReady && user) {
-      setDatabaseError(null);
       let isMounted = true;
+      queueMicrotask(() => {
+        if (isMounted) {
+          setDatabaseError(null);
+        }
+      });
 
       // Only fetch tasks if we don't already have them cached
       if (tasks.length === 0) {
@@ -83,7 +87,9 @@ export function DashboardLayout() {
       // Clear data when user logs out
       setTasks([]);
       setLists([]);
-      setDatabaseError(null);
+      queueMicrotask(() => {
+        setDatabaseError(null);
+      });
     }
   }, [setTasks, setLists, user, isAuthReady, tasks.length, lists.length]);
 

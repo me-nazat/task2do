@@ -58,7 +58,7 @@ export function KanbanView() {
                     onChange={(e) => setFilterType(e.target.value as any)}
                     className="text-[10px] mx-1 appearance-none outline-none font-label font-bold tracking-[0.1em] uppercase text-white bg-black/80 hover:bg-black px-4 py-1.5 rounded-full cursor-pointer transition-all shadow-sm pr-8"
                   >
-                    <option value="today">Today's Tasks</option>
+                    <option value="today">Today&apos;s Tasks</option>
                     <option value="week">Weekly Tasks</option>
                     <option value="all">All Tasks</option>
                   </select>

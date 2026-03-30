@@ -17,10 +17,26 @@ export async function getTasks(userId: string): Promise<DatabaseActionResult<typ
   }
 }
 
-export async function createTask(data: { title: string; listId?: string; startDate?: Date; endDate?: Date; isAllDay?: boolean; parentId?: string; quadrant?: string; priority?: number; status?: string; reminderAt?: Date; userId: string; recurrence?: string }): Promise<DatabaseActionResult<string>> {
+export async function createTask(data: {
+  title: string;
+  listId?: string;
+  startDate?: Date;
+  endDate?: Date;
+  isAllDay?: boolean;
+  parentId?: string;
+  quadrant?: string;
+  priority?: number;
+  status?: string;
+  reminderAt?: Date;
+  description?: string;
+  timezone?: string;
+  isCompleted?: boolean;
+  userId: string;
+  recurrence?: string;
+}): Promise<DatabaseActionResult<string>> {
   try {
     const id = uuidv4();
-    const { userId, ...taskData } = data;
+    const { userId } = data;
     
     // Ensure user exists
     const existingUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
@@ -42,12 +58,15 @@ export async function createTask(data: { title: string; listId?: string; startDa
       userId,
       title: data.title,
       listId: actualListId,
+      description: data.description || null,
       startDate: data.startDate || null,
       endDate: data.endDate || null,
       isAllDay: data.isAllDay || false,
+      timezone: data.timezone || null,
       parentId: data.parentId || null,
       quadrant: data.quadrant || null,
       priority: data.priority ?? 0,
+      isCompleted: data.isCompleted ?? data.status === 'done',
       status: (data.status as any) || 'todo',
       reminderAt: data.reminderAt || null,
       recurrence: data.recurrence || null,
