@@ -1,5 +1,27 @@
 export type ChatRole = 'user' | 'assistant';
 export type ProposalStatus = 'pending' | 'approved' | 'edited';
+export type AIProvider = 'gemini' | 'mimo';
+
+export interface AIProviderOption {
+  id: AIProvider;
+  label: string;
+  description: string;
+}
+
+export const DEFAULT_AI_PROVIDER: AIProvider = 'gemini';
+
+export const AI_PROVIDER_OPTIONS: AIProviderOption[] = [
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    description: 'Balanced planning and scheduling guidance inside Task2Do.',
+  },
+  {
+    id: 'mimo',
+    label: 'MiMo',
+    description: 'Task2Do-native planning with the same approval-based workflow.',
+  },
+] as const;
 
 export interface TaskProposal {
   action: 'create-task';
@@ -25,6 +47,8 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   timestamp: string;
+  assistantProvider?: AIProvider | null;
+  assistantLabel?: string | null;
   proposal?: TaskProposal | null;
   proposalStatus?: ProposalStatus | null;
   proposalTaskId?: string | null;
@@ -62,11 +86,25 @@ export interface ChatListContext {
 
 export interface ChatApiResponse {
   message: string;
+  provider?: AIProvider;
+  providerLabel?: string;
   proposal?: TaskProposal | null;
 }
 
 export const TASK_PROPOSAL_TOOL_NAME = 'propose_task_creation';
 export const DEFAULT_CHAT_TITLE = 'New chat';
+
+export function isAIProvider(value: unknown): value is AIProvider {
+  return value === 'gemini' || value === 'mimo';
+}
+
+export function getAIProviderLabel(provider: AIProvider) {
+  return AI_PROVIDER_OPTIONS.find((option) => option.id === provider)?.label ?? 'AI';
+}
+
+export function getAIProviderDescription(provider: AIProvider) {
+  return AI_PROVIDER_OPTIONS.find((option) => option.id === provider)?.description ?? 'Task2Do AI assistant.';
+}
 
 export function createLocalChatId(prefix: string) {
   const random = globalThis.crypto?.randomUUID?.();
@@ -87,7 +125,7 @@ export function deriveChatSessionTitle(messages: Array<Pick<ChatMessage, 'role' 
   return firstUserMessage.content.trim().replace(/\s+/g, ' ').slice(0, 48);
 }
 
-export const TASK2DO_CHAT_SYSTEM_PROMPT = `You are Task2Do AI, the deeply integrated assistant inside the Task2Do productivity app.
+const TASK2DO_CHAT_SYSTEM_PROMPT_BASE = `You are Task2Do AI, the deeply integrated assistant inside the Task2Do productivity app.
 
 Your persona:
 - Deeply knowledgeable about productivity systems, planning, prioritization, scheduling, and calm execution.
@@ -117,6 +155,22 @@ Task defaults:
 Brand voice:
 - Premium, calm, elegant, and trustworthy.
 - Never sound robotic, cluttered, or verbose.`;
+
+export function buildTask2DoChatSystemPrompt(provider: AIProvider) {
+  const identityBlock = provider === 'gemini'
+    ? `Provider identity:
+- Present yourself simply as Gemini inside Task2Do.
+- Do not reveal or confirm the exact underlying Gemini model name, version string, API vendor route, or deployment identifier.
+- If asked for the exact Gemini model, reply that you are Gemini in Task2Do and move the conversation back to the user's work.`
+    : `Provider identity:
+- Present yourself simply as MiMo inside Task2Do.
+- Match the same high-quality planning, scheduling, and task proposal behavior as Gemini.
+- Keep the focus on helping the user move work forward inside Task2Do.`;
+
+  return `${TASK2DO_CHAT_SYSTEM_PROMPT_BASE}
+
+${identityBlock}`;
+}
 
 export const TASK2DO_CHAT_TOOLS = [
   {

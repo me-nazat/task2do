@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  AIProvider,
   ChatListContext,
   ChatTaskContext,
-  TASK2DO_CHAT_SYSTEM_PROMPT,
+  DEFAULT_AI_PROVIDER,
   TASK2DO_CHAT_TOOLS,
   TASK_PROPOSAL_TOOL_NAME,
   TaskProposal,
+  buildTask2DoChatSystemPrompt,
+  getAIProviderLabel,
+  isAIProvider,
 } from '@/lib/ai/task2do-chat';
 
 type ConversationMessage = {
@@ -21,7 +25,86 @@ type ChatRequestBody = {
   lists?: ChatListContext[];
   now?: string;
   timezone?: string;
+  provider?: AIProvider;
 };
+
+type ProviderConfig = {
+  provider: AIProvider;
+  label: string;
+  apiKey: string;
+  endpoint: string;
+  model: string;
+  defaultBody: Record<string, unknown>;
+  extraHeaders?: Record<string, string>;
+};
+
+const OPENROUTER_CHAT_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'google/gemini-2.0-flash-001';
+const DEFAULT_MIMO_OPENROUTER_MODEL = process.env.MIMO_OPENROUTER_MODEL?.trim() || 'xiaomi/mimo-v2-flash';
+const DEFAULT_MIMO_DIRECT_MODEL = process.env.MIMO_MODEL?.trim() || DEFAULT_MIMO_OPENROUTER_MODEL;
+
+function buildProviderConfig(provider: AIProvider): ProviderConfig {
+  if (provider === 'mimo') {
+    const directEndpoint = process.env.MIMO_API_BASE_URL?.trim();
+    const directApiKey = process.env.MIMO_API_KEY?.trim();
+
+    if (directEndpoint && directApiKey) {
+      return {
+        provider,
+        label: getAIProviderLabel(provider),
+        apiKey: directApiKey,
+        endpoint: directEndpoint,
+        model: DEFAULT_MIMO_DIRECT_MODEL,
+        defaultBody: {
+          temperature: 0.45,
+          max_tokens: 1800,
+        },
+      };
+    }
+
+    const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+    if (!openRouterKey) {
+      throw new Error('OpenRouter API key not configured for MiMo fallback');
+    }
+
+    return {
+      provider,
+      label: getAIProviderLabel(provider),
+      apiKey: openRouterKey,
+      endpoint: OPENROUTER_CHAT_ENDPOINT,
+      model: DEFAULT_MIMO_OPENROUTER_MODEL,
+      defaultBody: {
+        temperature: 0.45,
+        max_tokens: 1800,
+      },
+      extraHeaders: {
+        'HTTP-Referer': 'https://task2do.app',
+        'X-Title': 'Task2Do AI Assistant',
+      },
+    };
+  }
+
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error('OpenRouter API key not configured');
+  }
+
+  return {
+    provider: 'gemini',
+    label: getAIProviderLabel('gemini'),
+    apiKey,
+    endpoint: OPENROUTER_CHAT_ENDPOINT,
+    model: DEFAULT_GEMINI_MODEL,
+    defaultBody: {
+      temperature: 0.45,
+      max_tokens: 1800,
+    },
+    extraHeaders: {
+      'HTTP-Referer': 'https://task2do.app',
+      'X-Title': 'Task2Do AI Assistant',
+    },
+  };
+}
 
 function normalizeTextContent(content: unknown): string {
   if (typeof content === 'string') {
@@ -137,9 +220,7 @@ function buildContextualPrompt({
         .join('\n')
     : 'No custom collections are currently available.';
 
-  return `${TASK2DO_CHAT_SYSTEM_PROMPT}
-
-Current context:
+  return `Current context:
 - Current datetime: ${currentTimeLabel}
 - Active timezone: ${timezone || 'UTC'}
 
@@ -189,26 +270,24 @@ function normalizeProposal(rawProposal: any): TaskProposal | null {
   };
 }
 
-async function callOpenRouter(apiKey: string, body: Record<string, unknown>) {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+async function callChatProvider(config: ProviderConfig, body: Record<string, unknown>) {
+  const response = await fetch(config.endpoint, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${config.apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://task2do.app',
-      'X-Title': 'Task2Do AI Assistant',
+      ...(config.extraHeaders ?? {}),
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-001',
-      temperature: 0.45,
-      max_tokens: 1800,
+      model: config.model,
+      ...config.defaultBody,
       ...body,
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenRouter API error ${response.status}: ${errorText}`);
+    throw new Error(`${config.label} API error ${response.status}: ${errorText}`);
   }
 
   return response.json();
@@ -221,7 +300,7 @@ function buildFallbackProposalMessage(proposal: TaskProposal) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, tasks, lists, now, timezone } = await request.json() as ChatRequestBody;
+    const { messages, tasks, lists, now, timezone, provider: rawProvider } = await request.json() as ChatRequestBody;
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
@@ -230,20 +309,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'API key not configured' },
-        { status: 500 }
-      );
-    }
-
+    const provider = isAIProvider(rawProvider) ? rawProvider : DEFAULT_AI_PROVIDER;
+    const providerConfig = buildProviderConfig(provider);
     const contextualPrompt = buildContextualPrompt({ tasks, lists, now, timezone });
     const conversation = formatConversation(messages);
+    const systemPrompt = buildTask2DoChatSystemPrompt(provider);
 
-    const initialResponse = await callOpenRouter(apiKey, {
+    const initialResponse = await callChatProvider(providerConfig, {
       messages: [
-        { role: 'system', content: contextualPrompt },
+        { role: 'system', content: `${systemPrompt}\n\n${contextualPrompt}` },
         ...conversation,
       ],
       tools: TASK2DO_CHAT_TOOLS,
@@ -259,6 +333,8 @@ export async function POST(request: NextRequest) {
     if (!toolCall) {
       return NextResponse.json({
         message: assistantText || 'I apologize, but I was unable to generate a response. Please try again.',
+        provider,
+        providerLabel: providerConfig.label,
       });
     }
 
@@ -268,13 +344,15 @@ export async function POST(request: NextRequest) {
     if (!proposal) {
       return NextResponse.json({
         message: assistantText || 'I understood the request, but I could not prepare a reliable task draft yet. Please try rephrasing it.',
+        provider,
+        providerLabel: providerConfig.label,
       });
     }
 
     try {
-      const followUpResponse = await callOpenRouter(apiKey, {
+      const followUpResponse = await callChatProvider(providerConfig, {
         messages: [
-          { role: 'system', content: contextualPrompt },
+          { role: 'system', content: `${systemPrompt}\n\n${contextualPrompt}` },
           ...conversation,
           {
             role: 'assistant',
@@ -299,6 +377,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         message: followUpText || buildFallbackProposalMessage(proposal),
+        provider,
+        providerLabel: providerConfig.label,
         proposal,
       });
     } catch (followUpError) {
@@ -306,6 +386,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         message: buildFallbackProposalMessage(proposal),
+        provider,
+        providerLabel: providerConfig.label,
         proposal,
       });
     }

@@ -2,7 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createTask } from '@/actions/task';
-import { ChatApiResponse, ChatMessage, ChatListContext, TaskProposal, createLocalChatId } from '@/lib/ai/task2do-chat';
+import {
+  type AIProvider,
+  ChatApiResponse,
+  ChatMessage,
+  ChatListContext,
+  TaskProposal,
+  createLocalChatId,
+  getAIProviderDescription,
+  getAIProviderLabel,
+  isAIProvider,
+} from '@/lib/ai/task2do-chat';
 import { cn } from '@/lib/utils';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 import { useStore, Task } from '@/store/useStore';
@@ -21,12 +31,19 @@ const suggestions = [
   'Turn my inbox into a prioritized action plan',
 ];
 
-function createAssistantMessage(content: string, proposal?: TaskProposal | null): ChatMessage {
+function createAssistantMessage(
+  content: string,
+  provider: AIProvider,
+  proposal?: TaskProposal | null,
+  providerLabel?: string
+): ChatMessage {
   return {
     id: createLocalChatId('assistant'),
     role: 'assistant',
     content,
     timestamp: new Date().toISOString(),
+    assistantProvider: provider,
+    assistantLabel: providerLabel || getAIProviderLabel(provider),
     proposal: proposal ?? null,
     proposalStatus: proposal ? 'pending' : null,
     proposalTaskId: null,
@@ -45,8 +62,10 @@ export function AIChatView() {
     chatSessions,
     activeChatSessionId,
     hasHydratedChat,
+    selectedAIProvider,
     ensureChatSession,
     startNewChat,
+    setSelectedAIProvider,
     setActiveChatSession,
     appendChatMessage,
     updateChatMessage,
@@ -79,6 +98,12 @@ export function AIChatView() {
   const historySessions = useMemo(() => (
     sessions.filter((session) => session.messages.length > 0)
   ), [sessions]);
+  const activeProviderLabel = useMemo(() => (
+    getAIProviderLabel(selectedAIProvider)
+  ), [selectedAIProvider]);
+  const activeProviderDescription = useMemo(() => (
+    getAIProviderDescription(selectedAIProvider)
+  ), [selectedAIProvider]);
 
   const editingMessage = useMemo(() => (
     messages.find((message) => message.id === editingMessageId) ?? null
@@ -241,6 +266,7 @@ export function AIChatView() {
       return;
     }
 
+    const providerToUse = selectedAIProvider;
     const sessionId = activeSession?.id ?? ensureChatSession(viewerId);
     const content = inputValue.trim();
     const userMessage: ChatMessage = {
@@ -261,6 +287,7 @@ export function AIChatView() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: providerToUse,
           messages: conversationMessages.slice(-40).map((message): RequestMessage => ({
             role: message.role,
             content: message.content,
@@ -288,11 +315,18 @@ export function AIChatView() {
       });
 
       const data = await response.json() as ChatApiResponse & { error?: string };
+      const responseProvider = isAIProvider(data.provider) ? data.provider : providerToUse;
+      const responseProviderLabel = data.providerLabel || getAIProviderLabel(responseProvider);
 
       if (!response.ok) {
         appendChatMessage(
           sessionId,
-          createAssistantMessage('I apologize — I encountered a temporary issue. Please try again in a moment.')
+          createAssistantMessage(
+            'I apologize — I encountered a temporary issue. Please try again in a moment.',
+            responseProvider,
+            null,
+            responseProviderLabel
+          )
         );
         return;
       }
@@ -301,14 +335,19 @@ export function AIChatView() {
         sessionId,
         createAssistantMessage(
           data.message || 'I prepared a draft for you below.',
-          data.proposal ?? null
+          responseProvider,
+          data.proposal ?? null,
+          responseProviderLabel
         )
       );
     } catch (error) {
       console.error('Chat error:', error);
       appendChatMessage(
         sessionId,
-        createAssistantMessage('Connection issue. Please check your network and try again.')
+        createAssistantMessage(
+          'Connection issue. Please check your network and try again.',
+          providerToUse
+        )
       );
     } finally {
       setIsLoading(false);
@@ -485,39 +524,67 @@ export function AIChatView() {
             <div>
               <h2 className="font-headline text-3xl font-medium tracking-tight text-primary italic">AI Assistant</h2>
               <p className="text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline/60">
-                Persistent memory and actionable planning
+                {activeProviderLabel} active • persistent memory and actionable planning
               </p>
             </div>
           </div>
 
-          <div ref={historyRef} className="relative flex items-center gap-3">
-            <button
-              onClick={() => setIsHistoryOpen((current) => !current)}
-              className="flex items-center gap-2 rounded-full border border-outline-variant/10 px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:border-primary/15 hover:bg-primary/5 hover:text-primary"
-            >
-              <History className="h-3.5 w-3.5" />
-              History
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="rounded-full border border-outline-variant/10 bg-white p-1 shadow-sm">
+              <div className="flex items-center gap-1">
+                {(['gemini', 'mimo'] as AIProvider[]).map((provider) => {
+                  const isActive = selectedAIProvider === provider;
 
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-2 rounded-full px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:bg-primary/5 hover:text-primary"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              New Chat
-            </button>
+                  return (
+                    <button
+                      key={provider}
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => setSelectedAIProvider(provider)}
+                      className={cn(
+                        'rounded-full px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.16em] transition-all',
+                        isActive
+                          ? 'bg-primary text-on-primary shadow-sm'
+                          : 'text-outline/55 hover:bg-primary/5 hover:text-primary',
+                        isLoading && 'cursor-not-allowed opacity-70'
+                      )}
+                    >
+                      {getAIProviderLabel(provider)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-            {isHistoryOpen && (
-              <ChatHistoryPanel
-                sessions={historySessions}
-                activeSessionId={activeSession?.id ?? null}
-                onSelectSession={(sessionId) => {
-                  setActiveChatSession(sessionId);
-                  setEditingMessageId(null);
-                  setIsHistoryOpen(false);
-                }}
-              />
-            )}
+            <div ref={historyRef} className="relative flex items-center gap-3">
+              <button
+                onClick={() => setIsHistoryOpen((current) => !current)}
+                className="flex items-center gap-2 rounded-full border border-outline-variant/10 px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:border-primary/15 hover:bg-primary/5 hover:text-primary"
+              >
+                <History className="h-3.5 w-3.5" />
+                History
+              </button>
+
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:bg-primary/5 hover:text-primary"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                New Chat
+              </button>
+
+              {isHistoryOpen && (
+                <ChatHistoryPanel
+                  sessions={historySessions}
+                  activeSessionId={activeSession?.id ?? null}
+                  onSelectSession={(sessionId) => {
+                    setActiveChatSession(sessionId);
+                    setEditingMessageId(null);
+                    setIsHistoryOpen(false);
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -545,7 +612,7 @@ export function AIChatView() {
                   What do you want to move forward today?
                 </h3>
                 <p className="max-w-xl text-[13px] leading-relaxed text-outline/60">
-                  Task2Do AI now remembers your sessions, understands your current task state, and can draft real in-app task actions for approval instead of sending you back to do everything manually.
+                  {activeProviderLabel} is ready with the same Task2Do-native context, task drafting flow, and approval-based actions. {activeProviderDescription}
                 </p>
               </motion.div>
 
@@ -594,11 +661,15 @@ export function AIChatView() {
                       message.role === 'user'
                         ? "rounded-br-md bg-primary text-on-primary"
                         : "rounded-bl-md border border-outline-variant/10 bg-surface-container-low"
-                    )}>
+                      )}>
                       {message.role === 'user' ? (
                         <p className="text-[14px] leading-relaxed">{message.content}</p>
                       ) : (
                         <div className="text-[14px] leading-relaxed text-on-surface">
+                          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-1 text-[9px] font-label font-bold uppercase tracking-[0.18em] text-outline/45 shadow-sm">
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+                            {message.assistantLabel || 'Assistant'}
+                          </div>
                           {message.content ? renderMarkdown(message.content) : null}
                           {message.proposal && (
                             <TaskProposalCard
@@ -635,7 +706,7 @@ export function AIChatView() {
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-primary/60" />
                       <span className="text-[12px] font-label font-bold uppercase tracking-[0.1em] text-outline/50">
-                        Thinking...
+                        {activeProviderLabel} is thinking...
                       </span>
                     </div>
                   </div>
@@ -657,7 +728,7 @@ export function AIChatView() {
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Task2Do AI to plan, prioritize, or schedule something..."
+              placeholder={`Ask ${activeProviderLabel} to plan, prioritize, or schedule something...`}
               rows={1}
               className="max-h-32 min-h-[40px] flex-1 resize-none border-none bg-transparent py-2 text-[15px] tracking-tight text-primary outline-none placeholder:text-outline/40"
             />
@@ -675,7 +746,7 @@ export function AIChatView() {
             </button>
           </div>
           <p className="mt-3 text-center text-[9px] font-label font-bold uppercase tracking-[0.2em] text-outline/30">
-            Task2Do AI • Saved chats, polished replies, and approval-based actions
+            {activeProviderLabel} • Shared Task2Do memory, polished replies, and approval-based actions
           </p>
         </div>
       </div>

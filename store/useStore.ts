@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { ChatMessage, ChatSession, createLocalChatId, DEFAULT_CHAT_TITLE, deriveChatSessionTitle } from '@/lib/ai/task2do-chat';
+import {
+  type AIProvider,
+  ChatMessage,
+  ChatSession,
+  createLocalChatId,
+  DEFAULT_AI_PROVIDER,
+  DEFAULT_CHAT_TITLE,
+  deriveChatSessionTitle,
+} from '@/lib/ai/task2do-chat';
 
 export type ViewType = 'list' | 'calendar' | 'matrix' | 'kanban' | 'habits' | 'today' | 'upcoming' | 'ai-chat' | 'completed-reminders';
 
@@ -47,6 +55,7 @@ interface AppState {
   chatSessions: ChatSession[];
   activeChatSessionId: string | null;
   hasHydratedChat: boolean;
+  selectedAIProvider: AIProvider;
   
   setCurrentView: (view: ViewType) => void;
   setSelectedListId: (id: string | null) => void;
@@ -62,6 +71,7 @@ interface AppState {
   setAuthReady: (ready: boolean) => void;
   setAuthModalOpen: (open: boolean) => void;
   setChatHydrated: (hydrated: boolean) => void;
+  setSelectedAIProvider: (provider: AIProvider) => void;
   addTask: (task: Task) => void;
   addList: (list: List) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -107,6 +117,7 @@ export const useStore = create<AppState>()(
       chatSessions: [],
       activeChatSessionId: null,
       hasHydratedChat: false,
+      selectedAIProvider: DEFAULT_AI_PROVIDER,
 
       setCurrentView: (view) => set({ currentView: view }),
       setSelectedListId: (id) => set({ selectedListId: id }),
@@ -122,6 +133,7 @@ export const useStore = create<AppState>()(
       setAuthReady: (ready) => set({ isAuthReady: ready }),
       setAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
       setChatHydrated: (hydrated) => set({ hasHydratedChat: hydrated }),
+      setSelectedAIProvider: (provider) => set({ selectedAIProvider: provider }),
       addTask: (task) => set((state) => ({ tasks: [...state.tasks, task] })),
       addList: (list) => set((state) => ({ lists: [...state.lists, list] })),
       updateTask: (id, updates) => set((state) => ({
@@ -221,6 +233,7 @@ export const useStore = create<AppState>()(
       partialize: (state) => ({
         chatSessions: state.chatSessions,
         activeChatSessionId: state.activeChatSessionId,
+        selectedAIProvider: state.selectedAIProvider,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setChatHydrated(true);

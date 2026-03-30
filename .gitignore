@@ -3,5 +3,7 @@ node_modules/
 coverage/
 .DS_Store
 *.log
+tmp/
+tsconfig.tsbuildinfo
 .env*
 !.env.example
