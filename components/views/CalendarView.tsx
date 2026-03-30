@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
+import { getTaskOccurrences } from '@/lib/recurrence';
 
 export function CalendarView() {
   const { tasks, setSelectedTaskId, user, addTask, updateTask: updateTaskState, deleteTask } = useStore();
@@ -36,6 +37,8 @@ export function CalendarView() {
   const [calendarQuadrant, setCalendarQuadrant] = useState<string | null>(null);
   const [calendarRecurrence, setCalendarRecurrence] = useState<string>('none');
   const [calendarRecurrenceDays, setCalendarRecurrenceDays] = useState<number[]>([]);
+  const [calendarCustomTimes, setCalendarCustomTimes] = useState<Record<number, string>>({});
+  const [showCustomTimes, setShowCustomTimes] = useState(false);
   const [calendarStatus, setCalendarStatus] = useState<'todo' | 'in-progress' | 'done'>('todo');
   const [calendarDescription, setCalendarDescription] = useState('');
 
@@ -43,6 +46,10 @@ export function CalendarView() {
     setShowDetails(false);
     setCalendarPriority(0);
     setCalendarQuadrant(null);
+    setCalendarRecurrence('none');
+    setCalendarRecurrenceDays([]);
+    setCalendarCustomTimes({});
+    setShowCustomTimes(false);
     setCalendarStatus('todo');
     setCalendarDescription('');
   };
@@ -52,6 +59,14 @@ export function CalendarView() {
       const title = newTaskTitle.trim();
       setNewTaskTitle('');
       
+      const recurrenceValue = showDetails ? (
+        calendarRecurrence === 'weekly' && calendarRecurrenceDays.length > 0 
+          ? `weekly:${calendarRecurrenceDays.join(',')}` 
+          : calendarRecurrence === 'custom'
+            ? `custom:${JSON.stringify({ days: calendarRecurrenceDays, times: showCustomTimes ? calendarCustomTimes : {} })}`
+            : calendarRecurrence === 'none' ? null : calendarRecurrence
+      ) : null;
+
       const tempId = `temp-${Date.now()}`;
       const newTask: Task = {
         id: tempId,
@@ -68,9 +83,7 @@ export function CalendarView() {
         timezone: null,
         reminderAt: null,
         status: showDetails ? calendarStatus : 'todo',
-        recurrence: calendarRecurrence === 'weekly' && calendarRecurrenceDays.length > 0 
-          ? `weekly:${calendarRecurrenceDays.join(',')}` 
-          : calendarRecurrence === 'none' ? null : calendarRecurrence,
+        recurrence: recurrenceValue,
       };
       addTask(newTask);
 
@@ -82,11 +95,7 @@ export function CalendarView() {
           priority: showDetails ? calendarPriority : 0,
           status: showDetails ? calendarStatus : undefined,
           quadrant: showDetails ? calendarQuadrant || undefined : undefined,
-          recurrence: showDetails ? (
-            calendarRecurrence === 'weekly' && calendarRecurrenceDays.length > 0 
-              ? `weekly:${calendarRecurrenceDays.join(',')}` 
-              : calendarRecurrence === 'none' ? undefined : calendarRecurrence
-          ) : undefined,
+          recurrence: recurrenceValue || undefined,
         }));
         updateTaskState(tempId, { id });
       } catch (error) {
@@ -171,7 +180,7 @@ export function CalendarView() {
       {/* Calendar Grid */}
       <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto bg-white hide-scrollbar">
         {calendarDays.map((day, idx) => {
-          const dayTasks = tasks.filter(t => t.startDate && isSameDay(new Date(t.startDate), day));
+          const dayTasks = tasks.filter(t => getTaskOccurrences(t, startOfDay(day), endOfDay(day)).length > 0);
           const isCurrentMonth = isSameMonth(day, monthStart);
           const isCurrentDay = isToday(day);
 
@@ -341,7 +350,11 @@ export function CalendarView() {
                             value={calendarRecurrence}
                             onChange={(e) => {
                               setCalendarRecurrence(e.target.value);
-                              if (e.target.value !== 'weekly') setCalendarRecurrenceDays([]);
+                              if (e.target.value !== 'weekly' && e.target.value !== 'custom') {
+                                setCalendarRecurrenceDays([]);
+                                setCalendarCustomTimes({});
+                                setShowCustomTimes(false);
+                              }
                             }}
                             className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
                           >
@@ -349,31 +362,71 @@ export function CalendarView() {
                             <option value="daily">Daily</option>
                             <option value="weekly">Weekly...</option>
                             <option value="monthly">Monthly</option>
+                            <option value="custom">Custom...</option>
                           </select>
                           
-                          {calendarRecurrence === 'weekly' && (
-                            <div className="flex gap-2 pb-2">
-                              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
-                                const isSelected = calendarRecurrenceDays.includes(idx);
-                                return (
+                          {(calendarRecurrence === 'weekly' || calendarRecurrence === 'custom') && (
+                            <div className="space-y-4 pt-2">
+                              <div className="flex gap-2">
+                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
+                                  const isSelected = calendarRecurrenceDays.includes(idx);
+                                  return (
+                                    <button
+                                      key={idx}
+                                      onClick={() => {
+                                        setCalendarRecurrenceDays(prev => {
+                                          const newDays = prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx];
+                                          // If deselecting a day, also clear its custom time
+                                          if (prev.includes(idx)) {
+                                            const newTimes = { ...calendarCustomTimes };
+                                            delete newTimes[idx];
+                                            setCalendarCustomTimes(newTimes);
+                                          }
+                                          return newDays;
+                                        });
+                                      }}
+                                      className={cn(
+                                        "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
+                                        isSelected 
+                                          ? "bg-primary text-on-primary shadow-sm" 
+                                          : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
+                                      )}
+                                    >
+                                      {day}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {calendarRecurrence === 'custom' && calendarRecurrenceDays.length > 0 && (
+                                <div className="space-y-3 pt-2">
                                   <button
-                                    key={idx}
-                                    onClick={() => {
-                                      setCalendarRecurrenceDays(prev => 
-                                        prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]
-                                      );
-                                    }}
-                                    className={cn(
-                                      "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
-                                      isSelected 
-                                        ? "bg-primary text-on-primary shadow-sm" 
-                                        : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
-                                    )}
+                                    onClick={() => setShowCustomTimes(!showCustomTimes)}
+                                    className="text-[9px] font-label font-bold tracking-[0.2em] uppercase text-primary/70 hover:text-primary flex items-center gap-2"
                                   >
-                                    {day}
+                                    <Plus className={cn("w-3 h-3 transition-transform", showCustomTimes && "rotate-45")} />
+                                    {showCustomTimes ? "Hide custom times" : "Add custom time also"}
                                   </button>
-                                );
-                              })}
+
+                                  {showCustomTimes && (
+                                    <div className="space-y-3 bg-primary/5 p-4 rounded-xl border border-primary/10">
+                                      {calendarRecurrenceDays.sort().map(dayIdx => (
+                                        <div key={dayIdx} className="flex items-center justify-between gap-4">
+                                          <span className="text-[10px] font-label font-bold uppercase tracking-wider text-outline/70 w-16">
+                                            {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIdx]}
+                                          </span>
+                                          <input 
+                                            type="time" 
+                                            value={calendarCustomTimes[dayIdx] || "09:00"}
+                                            onChange={(e) => setCalendarCustomTimes(prev => ({ ...prev, [dayIdx]: e.target.value }))}
+                                            className="bg-white border border-outline-variant/20 rounded-lg px-2 py-1 text-xs font-body focus:ring-1 focus:ring-primary/20 outline-none"
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -447,10 +500,9 @@ export function CalendarView() {
                 )}
               </AnimatePresence>
 
-              {/* Tasks for the date */}
               <div className="p-8 overflow-y-auto space-y-3 bg-surface-container-lowest/30">
                 {(() => {
-                  const dayTasks = tasks.filter(t => t.startDate && isSameDay(new Date(t.startDate), selectedDate));
+                  const dayTasks = tasks.filter(t => getTaskOccurrences(t, startOfDay(selectedDate), endOfDay(selectedDate)).length > 0);
                   
                   if (dayTasks.length === 0) {
                     return (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore, type Task } from '@/store/useStore';
 import { Plus, CheckCircle2, Calendar as CalendarIcon, Tag, ChevronDown, Bell, Flag, LayoutDashboard, X, AlignLeft, Clock, AlertTriangle, Repeat } from 'lucide-react';
 import { createTask, updateTask } from '@/actions/task';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ import { AIChatView } from '@/components/views/AIChatView';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { AlertBanner } from '@/components/ui/AlertBanner';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
+import { getTaskOccurrences } from '@/lib/recurrence';
 
 // Animation presets for consistent, smooth micro-interactions
 const viewTransition = {
@@ -65,6 +66,8 @@ export function MainContent() {
   const [modalReminderAt, setModalReminderAt] = useState<Date | null>(null);
   const [modalRecurrence, setModalRecurrence] = useState<string>('none');
   const [modalRecurrenceDays, setModalRecurrenceDays] = useState<number[]>([]);
+  const [modalCustomTimes, setModalCustomTimes] = useState<Record<number, string>>({});
+  const [showCustomTimes, setShowCustomTimes] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const modalInputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +91,8 @@ export function MainContent() {
     setModalReminderAt(null);
     setModalRecurrence('none');
     setModalRecurrenceDays([]);
+    setModalCustomTimes({});
+    setShowCustomTimes(false);
   }, []);
 
   // Context-aware modal opening
@@ -134,9 +139,11 @@ export function MainContent() {
       parentId: null,
       timezone: modalTimezone,
       reminderAt: modalReminderAt,
-      recurrence: (modalRecurrence === 'weekly' || modalRecurrence === 'custom') && modalRecurrenceDays.length > 0 
-        ? `${modalRecurrence}:${modalRecurrenceDays.join(',')}` 
-        : modalRecurrence === 'none' ? null : modalRecurrence,
+      recurrence: modalRecurrence === 'weekly' && modalRecurrenceDays.length > 0 
+        ? `weekly:${modalRecurrenceDays.join(',')}` 
+        : modalRecurrence === 'custom' && modalRecurrenceDays.length > 0
+          ? `custom:${JSON.stringify({ days: modalRecurrenceDays, times: showCustomTimes ? modalCustomTimes : {} })}`
+          : modalRecurrence === 'none' ? null : modalRecurrence,
       status: modalStatus as 'todo' | 'in-progress' | 'done',
     };
     addTask(newTask);
@@ -152,9 +159,11 @@ export function MainContent() {
         priority: modalPriority,
         status: modalStatus,
         quadrant: modalQuadrant || undefined,
-        recurrence: (modalRecurrence === 'weekly' || modalRecurrence === 'custom') && modalRecurrenceDays.length > 0 
-          ? `${modalRecurrence}:${modalRecurrenceDays.join(',')}` 
-          : modalRecurrence === 'none' ? undefined : modalRecurrence,
+        recurrence: modalRecurrence === 'weekly' && modalRecurrenceDays.length > 0 
+          ? `weekly:${modalRecurrenceDays.join(',')}` 
+          : modalRecurrence === 'custom' && modalRecurrenceDays.length > 0
+            ? `custom:${JSON.stringify({ days: modalRecurrenceDays, times: showCustomTimes ? modalCustomTimes : {} })}`
+            : modalRecurrence === 'none' ? undefined : modalRecurrence,
       }));
       updateTaskState(tempId, { id });
     } catch (error) {
@@ -180,8 +189,8 @@ export function MainContent() {
   // Memoize the "now" value per render to keep consistency
   const now = useMemo(() => new Date(), [tasks, currentView, upcomingFilter, inboxFilter, searchQuery]);
 
-  const isTaskToday = useCallback((task: typeof tasks[0]) => {
-    return task.startDate && isSameDay(new Date(task.startDate), now);
+  const isTaskToday = useCallback((task: Task) => {
+    return getTaskOccurrences(task, startOfDay(now), endOfDay(now)).length > 0;
   }, [now]);
 
   const filteredTasks = useMemo(() => {
@@ -207,15 +216,16 @@ export function MainContent() {
         }
         if (upcomingFilter === 'this-week') {
           // Tasks dated within the next 7 days (not today) + undated tasks
-          if (!task.startDate) return false; // undated goes to "All Tasks" or "This Month"
-          const taskDate = new Date(task.startDate);
-          return isWithinInterval(taskDate, { start: endOfDay(now), end: endOfDay(addDays(now, 7)) });
+          const taskDate = task.startDate ? new Date(task.startDate) : null;
+          const range = { start: endOfDay(now), end: endOfDay(addDays(now, 7)) };
+          return getTaskOccurrences(task, range.start, range.end).length > 0;
         }
         if (upcomingFilter === 'this-month') {
           // Tasks dated within the next 30 days (not today) + tasks with NO date
           if (!task.startDate) return true; // undated tasks go to "This Month"
-          const taskDate = new Date(task.startDate);
-          return isWithinInterval(taskDate, { start: endOfDay(now), end: endOfDay(addMonths(now, 1)) });
+          const taskDate = task.startDate ? new Date(task.startDate) : null;
+          const range = { start: endOfDay(now), end: endOfDay(addMonths(now, 1)) };
+          return getTaskOccurrences(task, range.start, range.end).length > 0;
         }
         return true;
       }
@@ -234,15 +244,17 @@ export function MainContent() {
         if (!isInboxTask) return false;
 
         if (inboxFilter === 'day') {
-          return task.startDate && isSameDay(new Date(task.startDate), now);
+          return isTaskToday(task);
         }
         if (inboxFilter === 'week') {
           if (!task.startDate) return true;
-          return isWithinInterval(new Date(task.startDate), { start: startOfDay(now), end: endOfDay(addDays(now, 7)) });
+          const range = { start: startOfDay(now), end: endOfDay(addDays(now, 7)) };
+          return getTaskOccurrences(task, range.start, range.end).length > 0;
         }
         if (inboxFilter === 'month') {
           if (!task.startDate) return true;
-          return isWithinInterval(new Date(task.startDate), { start: startOfDay(now), end: endOfDay(addMonths(now, 1)) });
+          const range = { start: startOfDay(now), end: endOfDay(addMonths(now, 1)) };
+          return getTaskOccurrences(task, range.start, range.end).length > 0;
         }
         return true; // 'all'
       }
@@ -847,7 +859,11 @@ export function MainContent() {
                       value={modalRecurrence}
                       onChange={(e) => {
                         setModalRecurrence(e.target.value);
-                        if (e.target.value !== 'weekly') setModalRecurrenceDays([]);
+                        if (e.target.value !== 'weekly' && e.target.value !== 'custom') {
+                          setModalRecurrenceDays([]);
+                          setModalCustomTimes({});
+                          setShowCustomTimes(false);
+                        }
                       }}
                       className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
                     >
@@ -858,8 +874,8 @@ export function MainContent() {
                       <option value="custom">Custom...</option>
                     </select>
                     
-                    {modalRecurrence === 'custom' && (
-                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {(modalRecurrence === 'weekly' || modalRecurrence === 'custom') && (
+                      <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="flex flex-col gap-3">
                           <span className="text-[8px] font-label font-bold tracking-[0.1em] uppercase text-outline/40">Select Occurrence Days</span>
                           <div className="flex gap-2">
@@ -868,10 +884,17 @@ export function MainContent() {
                               return (
                                 <button
                                   key={idx}
+                                  type="button"
                                   onClick={() => {
-                                    setModalRecurrenceDays(prev => 
-                                      prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]
-                                    );
+                                    setModalRecurrenceDays(prev => {
+                                      const newDays = prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx];
+                                      if (prev.includes(idx)) {
+                                        const newTimes = { ...modalCustomTimes };
+                                        delete newTimes[idx];
+                                        setModalCustomTimes(newTimes);
+                                      }
+                                      return newDays;
+                                    });
                                   }}
                                   className={cn(
                                     "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
@@ -887,6 +910,37 @@ export function MainContent() {
                           </div>
                         </div>
 
+                        {modalRecurrence === 'custom' && modalRecurrenceDays.length > 0 && (
+                          <div className="space-y-3 pt-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowCustomTimes(!showCustomTimes)}
+                              className="text-[9px] font-label font-bold tracking-[0.2em] uppercase text-primary/70 hover:text-primary flex items-center gap-2"
+                            >
+                              <Plus className={cn("w-3 h-3 transition-transform", showCustomTimes && "rotate-45")} />
+                              {showCustomTimes ? "Hide custom times" : "Add custom time also"}
+                            </button>
+
+                            {showCustomTimes && (
+                              <div className="space-y-3 bg-primary/5 p-4 rounded-xl border border-primary/10">
+                                {modalRecurrenceDays.sort().map(dayIdx => (
+                                  <div key={dayIdx} className="flex items-center justify-between gap-4">
+                                    <span className="text-[10px] font-label font-bold uppercase tracking-wider text-outline/70 w-16">
+                                      {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIdx]}
+                                    </span>
+                                    <input 
+                                      type="time" 
+                                      value={modalCustomTimes[dayIdx] || "09:00"}
+                                      onChange={(e) => setModalCustomTimes(prev => ({ ...prev, [dayIdx]: e.target.value }))}
+                                      className="bg-white border border-outline-variant/20 rounded-lg px-2 py-1 text-xs font-body focus:ring-1 focus:ring-primary/20 outline-none"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="bg-primary/5 p-3 rounded-xl border border-primary/10 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <CalendarIcon className="w-3 h-3 text-primary/40" />
@@ -896,13 +950,6 @@ export function MainContent() {
                                 {modalStartDate ? format(modalStartDate, 'MMMM d, yyyy') : 'No date set'}
                             </span>
                         </div>
-                      </div>
-                    )}
-
-                    {modalRecurrence === 'weekly' && (
-                      <div className="text-[9px] font-label font-bold tracking-[0.1em] uppercase text-outline/40 py-1 flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-primary/40" />
-                        Repeats every week on {modalStartDate ? format(modalStartDate, 'EEEE') : 'scheduled day'}
                       </div>
                     )}
                   </div>

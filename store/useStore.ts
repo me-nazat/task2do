@@ -19,7 +19,7 @@ export interface Task {
   timezone: string | null;
   reminderAt: Date | null;
   status: 'todo' | 'in-progress' | 'done' | null;
-  recurrence: string | null;
+  recurrence: string | null; // Can be simple string ("daily", "weekly") or JSON string for "custom"
 }
 
 export interface List {

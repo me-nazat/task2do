@@ -1,7 +1,7 @@
 'use client';
 
 import { useStore } from '@/store/useStore';
-import { X, Calendar as CalendarIcon, Flag, Tag, AlignLeft, CheckSquare, Trash2, Plus, Circle, CheckCircle2, LayoutDashboard } from 'lucide-react';
+import { X, Calendar as CalendarIcon, Flag, Tag, AlignLeft, CheckSquare, Trash2, Plus, Circle, CheckCircle2, LayoutDashboard, Repeat } from 'lucide-react';
 import { updateTask, deleteTask, createTask } from '@/actions/task';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ export function RightPane() {
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [showCustomTimes, setShowCustomTimes] = useState(false);
 
   if (!selectedTaskId || !task) return null;
 
@@ -167,6 +168,138 @@ export function RightPane() {
                   }
                 }}
               />
+            </div>
+          </div>
+
+          {/* Repeat */}
+          <div className="flex items-start gap-6 text-sm">
+            <div className="w-24 text-outline/70 flex items-center gap-2.5 pt-1.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
+              <Repeat className="w-3.5 h-3.5" /> Repeat
+            </div>
+            <div className="flex-1 min-w-0 space-y-3">
+              <select
+                value={task.recurrence?.startsWith('custom:') ? 'custom' : (task.recurrence?.startsWith('weekly:') ? 'weekly' : (task.recurrence || 'none'))}
+                onChange={async (e) => {
+                  const val = e.target.value;
+                  let newVal: string | null = val === 'none' ? null : val;
+                  if (val === 'weekly') newVal = 'weekly:1,2,3,4,5'; // Default to weekdays if just selecting weekly
+                  if (val === 'custom') newVal = `custom:${JSON.stringify({ days: [], times: {} })}`;
+                  
+                  updateTaskState(task.id, { recurrence: newVal });
+                  try {
+                    unwrapDatabaseResult(await updateTask(task.id, { recurrence: newVal }));
+                  } catch (error) {
+                    alert(getClientErrorMessage(error, 'Unable to update the recurrence right now.'));
+                  }
+                }}
+                className="w-full max-w-full bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+              >
+                <option value="none">None</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly...</option>
+                <option value="monthly">Monthly</option>
+                <option value="custom">Custom...</option>
+              </select>
+
+              {(task.recurrence?.startsWith('weekly:') || task.recurrence?.startsWith('custom:')) && (
+                <div className="space-y-4 pt-1">
+                  <div className="flex gap-1.5">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
+                      let isSelected = false;
+                      let currentConfig: any = { days: [] };
+                      
+                      if (task.recurrence?.startsWith('weekly:')) {
+                        isSelected = task.recurrence.split(':')[1].split(',').map(Number).includes(idx);
+                      } else if (task.recurrence?.startsWith('custom:')) {
+                        try {
+                          currentConfig = JSON.parse(task.recurrence!.slice(7));
+                          isSelected = currentConfig.days.includes(idx);
+                        } catch (e) {}
+                      }
+
+                      return (
+                        <button
+                          key={idx}
+                          onClick={async () => {
+                            let newVal = task.recurrence;
+                            if (task.recurrence?.startsWith('weekly:')) {
+                              const days = task.recurrence.split(':')[1].split(',').map(Number);
+                              const newDays = days.includes(idx) ? days.filter(d => d !== idx) : [...days, idx];
+                              newVal = `weekly:${newDays.sort().join(',')}`;
+                            } else if (task.recurrence?.startsWith('custom:')) {
+                              try {
+                                const config = JSON.parse(task.recurrence.slice(7));
+                                const newDays = config.days.includes(idx) ? config.days.filter((d: number) => d !== idx) : [...config.days, idx];
+                                const newTimes = { ...config.times };
+                                if (config.days.includes(idx)) delete newTimes[idx];
+                                newVal = `custom:${JSON.stringify({ days: newDays.sort(), times: newTimes })}`;
+                              } catch (e) {}
+                            }
+
+                            updateTaskState(task.id, { recurrence: newVal });
+                            try {
+                              unwrapDatabaseResult(await updateTask(task.id, { recurrence: newVal }));
+                            } catch (error) {
+                              alert(getClientErrorMessage(error, 'Unable to update recurrence days.'));
+                            }
+                          }}
+                          className={cn(
+                            "w-6 h-6 rounded-full text-[9px] font-bold transition-all",
+                            isSelected 
+                              ? "bg-primary text-on-primary shadow-sm" 
+                              : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
+                          )}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {task.recurrence?.startsWith('custom:') && (
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => setShowCustomTimes(!showCustomTimes)}
+                        className="text-[9px] font-label font-bold tracking-[0.2em] uppercase text-primary/70 hover:text-primary flex items-center gap-2"
+                      >
+                        <Plus className={cn("w-3 h-3 transition-transform", showCustomTimes && "rotate-45")} />
+                        {showCustomTimes ? "Hide custom times" : "Add custom time also"}
+                      </button>
+
+                      {showCustomTimes && (
+                        <div className="space-y-2 bg-primary/5 p-3 rounded-xl border border-primary/10">
+                          {(() => {
+                            try {
+                              const config = JSON.parse(task.recurrence!.slice(7));
+                              if (config.days.length === 0) return <div className="text-[9px] text-outline/40 italic py-1">Select days above first</div>;
+                              return config.days.sort().map((dayIdx: number) => (
+                                <div key={dayIdx} className="flex items-center justify-between gap-3">
+                                  <span className="text-[9px] font-label font-bold uppercase tracking-wider text-outline/70 w-14">
+                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayIdx]}
+                                  </span>
+                                  <input 
+                                    type="time" 
+                                    value={config.times[dayIdx] || "09:00"}
+                                    onChange={async (e) => {
+                                      const newTimes = { ...config.times, [dayIdx]: e.target.value };
+                                      const newVal = `custom:${JSON.stringify({ ...config, times: newTimes })}`;
+                                      updateTaskState(task.id, { recurrence: newVal });
+                                      try {
+                                        unwrapDatabaseResult(await updateTask(task.id, { recurrence: newVal }));
+                                      } catch (err) {}
+                                    }}
+                                    className="bg-white border border-outline-variant/20 rounded-lg px-1.5 py-0.5 text-[10px] font-body focus:ring-1 focus:ring-primary/20 outline-none"
+                                  />
+                                </div>
+                              ));
+                            } catch (e) { return null; }
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
