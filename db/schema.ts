@@ -64,3 +64,26 @@ export const habitLogs = sqliteTable('habit_logs', {
   date: text('date').notNull(), // YYYY-MM-DD
   status: text('status').notNull(), // 'completed', 'skipped', 'failed'
 });
+
+export const pocketTrackerTransactions = sqliteTable('pocket_tracker_transactions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  title: text('title').notNull(),
+  category: text('category').notNull(),
+  type: text('type').notNull(), // expense | earning
+  date: text('date').notNull(), // YYYY-MM-DD
+  amountCents: integer('amount_cents').notNull(),
+  icon: text('icon').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+export const pocketTrackerBudgets = sqliteTable('pocket_tracker_budgets', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  category: text('category').notNull(),
+  limitCents: integer('limit_cents').notNull(),
+  periodLabel: text('period_label').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});

@@ -50,6 +50,7 @@ interface AppState {
   tasks: Task[];
   lists: List[];
   user: { id: string; email: string | null; displayName: string | null } | null;
+  isDemoMode: boolean;
   isAuthReady: boolean;
   isAuthModalOpen: boolean;
   chatSessions: ChatSession[];
@@ -68,6 +69,7 @@ interface AppState {
   setTasks: (tasks: Task[]) => void;
   setLists: (lists: List[]) => void;
   setUser: (user: { id: string; email: string | null; displayName: string | null } | null) => void;
+  setDemoMode: (enabled: boolean) => void;
   setAuthReady: (ready: boolean) => void;
   setAuthModalOpen: (open: boolean) => void;
   setChatHydrated: (hydrated: boolean) => void;
@@ -112,6 +114,7 @@ export const useStore = create<AppState>()(
       tasks: [],
       lists: [],
       user: null,
+      isDemoMode: false,
       isAuthReady: false,
       isAuthModalOpen: false,
       chatSessions: [],
@@ -130,6 +133,7 @@ export const useStore = create<AppState>()(
       setTasks: (tasks) => set({ tasks }),
       setLists: (lists) => set({ lists }),
       setUser: (user) => set({ user }),
+      setDemoMode: (enabled) => set({ isDemoMode: enabled }),
       setAuthReady: (ready) => set({ isAuthReady: ready }),
       setAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
       setChatHydrated: (hydrated) => set({ hasHydratedChat: hydrated }),
