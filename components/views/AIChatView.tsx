@@ -114,8 +114,16 @@ export function AIChatView() {
       return;
     }
 
-    ensureChatSession(viewerId);
-  }, [ensureChatSession, hasHydratedChat, viewerId]);
+    // BUG 4 FIX: On hard refresh/initial load, start a new chat instead of loading previous session
+    // Check if this is a fresh page load by checking if we have an active session that was just hydrated
+    const isFreshLoad = !sessionStorage.getItem('task2do-chat-initialized');
+    if (isFreshLoad) {
+      sessionStorage.setItem('task2do-chat-initialized', 'true');
+      startNewChat(viewerId);
+    } else {
+      ensureChatSession(viewerId);
+    }
+  }, [ensureChatSession, hasHydratedChat, viewerId, startNewChat]);
 
   useEffect(() => {
     inputRef.current?.focus();

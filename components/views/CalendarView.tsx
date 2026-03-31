@@ -29,7 +29,13 @@ export function CalendarView() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [calendarKey, setCalendarKey] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // BUG 2 FIX: Force re-render when month changes
+  useEffect(() => {
+    setCalendarKey(prev => prev + 1);
+  }, [currentMonth]);
 
   // Expandable details state
   const [showDetails, setShowDetails] = useState(false);
@@ -209,7 +215,8 @@ export function CalendarView() {
               </div>
 
               <div className="flex flex-col gap-2 overflow-y-auto max-h-[140px] hide-scrollbar">
-                {dayTasks.map(task => (
+                {/* BUG 3 FIX: Limit displayed tasks to 5, hide overflow */}
+                {dayTasks.slice(0, 5).map(task => (
                   <motion.div
                     layoutId={task.id}
                     key={task.id}
@@ -224,6 +231,11 @@ export function CalendarView() {
                     {task.title}
                   </motion.div>
                 ))}
+                {dayTasks.length > 5 && (
+                  <div className="text-[9px] font-label font-bold tracking-[0.1em] uppercase text-outline/40 text-center py-1">
+                    +{dayTasks.length - 5} more
+                  </div>
+                )}
               </div>
             </div>
           );

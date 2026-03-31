@@ -194,7 +194,7 @@ export function MainContent() {
   }, [now]);
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
+    const filtered = tasks.filter(task => {
       if (task.parentId) return false;
       if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) {
         return false;
@@ -260,6 +260,18 @@ export function MainContent() {
       }
       return true;
     });
+
+    // BUG 1 FIX: Sort Inbox tasks chronologically by date/time (ascending)
+    if (currentView === 'list' && (!selectedListId || selectedListId === 'inbox')) {
+      return [...filtered].sort((a, b) => {
+        if (!a.startDate && !b.startDate) return 0;
+        if (!a.startDate) return 1;
+        if (!b.startDate) return -1;
+        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+      });
+    }
+
+    return filtered;
   }, [tasks, currentView, selectedListId, searchQuery, inboxFilter, upcomingFilter, now, isTaskToday]);
 
   // Get tasks with upcoming reminders (used in Inbox view Reminders Box)
