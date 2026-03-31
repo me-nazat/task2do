@@ -1,67 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-:root,
-html[data-product="task2do"][data-theme="light"] {
-  --app-bg: #f5efe7;
-  --app-header: rgba(245, 239, 231, 0.88);
-  --app-sidebar: #f0e7dc;
-  --app-panel: rgba(255, 255, 255, 0.72);
-  --app-input-bg: rgba(255, 255, 255, 0.82);
-  --app-hover: rgba(59, 37, 116, 0.06);
-  --app-border: rgba(98, 74, 148, 0.12);
-  --app-text: #594f73;
-  --app-text-strong: #231836;
-  --app-muted: rgba(89, 79, 115, 0.68);
-  --app-accent: #6d4dff;
-  --app-accent-soft: rgba(109, 77, 255, 0.18);
-  --app-profile-chip: rgba(109, 77, 255, 0.08);
-  --nav-active-bg: #6d4dff;
-  --nav-active-text: #ffffff;
-  --switcher-active-bg: #231836;
-  --switcher-active-text: #ffffff;
-}
-
-html[data-product="pocket-tracker"][data-theme="dark"] {
-  --app-bg: #07111f;
-  --app-header: rgba(7, 17, 31, 0.82);
-  --app-sidebar: #0b1728;
-  --app-panel: #101f34;
-  --app-input-bg: #13253d;
-  --app-hover: rgba(59, 130, 246, 0.08);
-  --app-border: rgba(148, 163, 184, 0.14);
-  --app-text: rgba(226, 232, 240, 0.92);
-  --app-text-strong: #f8fbff;
-  --app-muted: rgba(191, 208, 230, 0.62);
-  --app-accent: #4da3ff;
-  --app-accent-soft: rgba(77, 163, 255, 0.18);
-  --app-profile-chip: rgba(77, 163, 255, 0.08);
-  --nav-active-bg: #2563eb;
-  --nav-active-text: #ffffff;
-  --switcher-active-bg: #2563eb;
-  --switcher-active-text: #ffffff;
-}
-
-html[data-product="pocket-tracker"][data-theme="light"] {
-  --app-bg: #f5f8fe;
-  --app-header: rgba(245, 248, 254, 0.88);
-  --app-sidebar: #ffffff;
-  --app-panel: rgba(255, 255, 255, 0.92);
-  --app-input-bg: #ffffff;
-  --app-hover: rgba(37, 99, 235, 0.06);
-  --app-border: rgba(37, 99, 235, 0.1);
-  --app-text: #334155;
-  --app-text-strong: #0f172a;
-  --app-muted: rgba(51, 65, 85, 0.6);
-  --app-accent: #2563eb;
-  --app-accent-soft: rgba(37, 99, 235, 0.14);
-  --app-profile-chip: rgba(37, 99, 235, 0.06);
-  --nav-active-bg: #e8f0ff;
-  --nav-active-text: #2563eb;
-  --switcher-active-bg: #2563eb;
-  --switcher-active-text: #ffffff;
-}
-
 @theme {
   --font-headline: var(--font-cormorant), serif;
   --font-body: var(--font-inter), sans-serif;
@@ -124,21 +63,10 @@ html[data-product="pocket-tracker"][data-theme="light"] {
 }
 
 @layer base {
-  html {
-    color-scheme: light;
-  }
-
-  html[data-product="pocket-tracker"][data-theme="dark"] {
-    color-scheme: dark;
-  }
-
   body {
-    background-color: var(--app-bg);
-    color: var(--app-text);
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
     font-family: var(--font-body);
-    transition:
-      background-color 180ms ease,
-      color 180ms ease;
   }
 }
 
@@ -157,11 +85,6 @@ html[data-product="pocket-tracker"][data-theme="light"] {
 .glass-panel {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(20px);
-}
-
-.panel-grid {
-  display: grid;
-  gap: 1.25rem;
 }
 
 .editorial-shadow {

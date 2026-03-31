@@ -195,7 +195,7 @@ export function CalendarView() {
               key={day.toString()}
               onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
               className={cn(
-                "min-h-[160px] p-4 border-r border-b border-outline-variant/10 flex flex-col gap-3 transition-all hover:bg-primary/[0.02] cursor-pointer overflow-hidden",
+                "min-h-[160px] p-4 border-r border-b border-outline-variant/10 flex flex-col gap-3 transition-all hover:bg-primary/[0.02] cursor-pointer",
                 !isCurrentMonth && "bg-primary/[0.01] opacity-30",
                 idx % 7 === 6 && "border-r-0"
               )}
@@ -214,7 +214,8 @@ export function CalendarView() {
                 )}
               </div>
 
-              <div className="flex-1 flex flex-col gap-2 overflow-hidden">
+              <div className="flex flex-col gap-2 overflow-y-auto max-h-[140px] hide-scrollbar">
+                {/* BUG 3 FIX: Limit displayed tasks to 5, hide overflow */}
                 {dayTasks.slice(0, 5).map(task => (
                   <motion.div
                     layoutId={task.id}

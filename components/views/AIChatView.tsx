@@ -55,7 +55,6 @@ export function AIChatView() {
     tasks,
     lists,
     user,
-    isDemoMode,
     setAuthModalOpen,
     addTask,
     updateTask: updateTaskState,
@@ -221,12 +220,10 @@ export function AIChatView() {
       return false;
     }
 
-    if (!user && !isDemoMode) {
+    if (!user) {
       setAuthModalOpen(true);
       return false;
     }
-
-    const currentUser = user;
 
     const proposal = sanitizeProposal(proposalInput);
     const tempId = createLocalChatId('temp-task');
@@ -237,20 +234,6 @@ export function AIChatView() {
 
     setSubmittingMessageId(messageId);
     addTask(optimisticTask);
-
-    if (isDemoMode) {
-      updateChatMessage(sessionId, messageId, {
-        proposal,
-        proposalStatus: status,
-        proposalTaskId: tempId,
-      });
-      setSubmittingMessageId(null);
-      return true;
-    }
-
-    if (!currentUser) {
-      return false;
-    }
 
     try {
       const id = unwrapDatabaseResult(await createTask({
@@ -267,7 +250,7 @@ export function AIChatView() {
         reminderAt,
         isCompleted: proposal.status === 'done',
         recurrence: proposal.recurrence || undefined,
-        userId: currentUser.id,
+        userId: user.id,
       }));
 
       updateTaskState(tempId, { id });
@@ -540,22 +523,22 @@ export function AIChatView() {
 
   return (
     <>
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-6">
+      <div className="mx-auto flex h-[calc(100vh-128px)] max-w-4xl flex-col">
+        <div className="mb-8 flex items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 shadow-lg shadow-purple-500/20">
               <Sparkles className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="font-headline text-[44px] font-medium tracking-[-0.04em] text-primary italic">AI Assistant</h2>
-              <p className="text-[10px] font-label font-bold uppercase tracking-[0.25em] text-outline/60">
+              <h2 className="font-headline text-3xl font-medium tracking-tight text-primary italic">AI Assistant</h2>
+              <p className="text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline/60">
                 {activeProviderLabel} active • persistent memory and actionable planning
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <div className="rounded-full border border-outline-variant/10 bg-white/80 p-1 shadow-sm backdrop-blur-sm">
+            <div className="rounded-full border border-outline-variant/10 bg-white p-1 shadow-sm">
               <div className="flex items-center gap-1">
                 {(['gemini', 'mimo'] as AIProvider[]).map((provider) => {
                   const isActive = selectedAIProvider === provider;
@@ -584,7 +567,7 @@ export function AIChatView() {
             <div ref={historyRef} className="relative flex items-center gap-3">
               <button
                 onClick={() => setIsHistoryOpen((current) => !current)}
-                className="flex items-center gap-2 rounded-full border border-outline-variant/10 bg-white/70 px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:border-primary/15 hover:bg-primary/5 hover:text-primary"
+                className="flex items-center gap-2 rounded-full border border-outline-variant/10 px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:border-primary/15 hover:bg-primary/5 hover:text-primary"
               >
                 <History className="h-3.5 w-3.5" />
                 History
@@ -592,7 +575,7 @@ export function AIChatView() {
 
               <button
                 onClick={handleReset}
-                className="flex items-center gap-2 rounded-full bg-white/40 px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:bg-primary/5 hover:text-primary"
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:bg-primary/5 hover:text-primary"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 New Chat
@@ -613,9 +596,9 @@ export function AIChatView() {
           </div>
         </div>
 
-        <div className="hide-scrollbar min-h-[620px] flex-1 overflow-y-auto rounded-[34px] border border-outline-variant/10 bg-white/80 shadow-[0_24px_72px_rgba(35,24,54,0.08)] backdrop-blur-xl">
+        <div className="hide-scrollbar flex-1 overflow-y-auto rounded-2xl border border-outline-variant/10 bg-white shadow-sm">
           {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center p-12 text-center md:p-20">
+            <div className="flex h-full flex-col items-center justify-center p-12 text-center">
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -633,10 +616,10 @@ export function AIChatView() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
               >
-                <h3 className="mb-4 font-headline text-[40px] font-medium italic tracking-[-0.04em] text-primary">
+                <h3 className="mb-2 font-headline text-2xl font-medium italic tracking-tight text-primary">
                   What do you want to move forward today?
                 </h3>
-                <p className="max-w-2xl text-[15px] leading-8 text-outline/60">
+                <p className="max-w-xl text-[13px] leading-relaxed text-outline/60">
                   {activeProviderLabel} is ready with the same Task2Do-native context, task drafting flow, and approval-based actions. {activeProviderDescription}
                 </p>
               </motion.div>
@@ -645,7 +628,7 @@ export function AIChatView() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="mt-10 flex max-w-3xl flex-wrap justify-center gap-3"
+                className="mt-8 flex max-w-2xl flex-wrap justify-center gap-3"
               >
                 {suggestions.map((suggestion) => (
                   <button
@@ -654,7 +637,7 @@ export function AIChatView() {
                       setInputValue(suggestion);
                       inputRef.current?.focus();
                     }}
-                    className="rounded-full border border-primary/10 bg-white px-5 py-3 text-[13px] font-medium text-primary/75 transition-all hover:-translate-y-0.5 hover:border-primary/20 hover:bg-primary/5 hover:shadow-sm"
+                    className="rounded-full border border-primary/10 bg-primary/5 px-5 py-2.5 text-[12px] font-medium text-primary/70 transition-all hover:border-primary/20 hover:bg-primary/10 hover:shadow-sm"
                   >
                     {suggestion}
                   </button>
@@ -682,10 +665,10 @@ export function AIChatView() {
                     )}
 
                     <div className={cn(
-                      "max-w-[78%] rounded-[24px] px-6 py-4",
+                      "max-w-[78%] rounded-2xl px-6 py-4",
                       message.role === 'user'
                         ? "rounded-br-md bg-primary text-on-primary"
-                        : "rounded-bl-md border border-outline-variant/10 bg-[#f6f1ff]"
+                        : "rounded-bl-md border border-outline-variant/10 bg-surface-container-low"
                       )}>
                       {message.role === 'user' ? (
                         <p className="text-[14px] leading-relaxed">{message.content}</p>
@@ -744,7 +727,7 @@ export function AIChatView() {
         </div>
 
         <div className="mt-6">
-          <div className="flex items-end gap-3 rounded-[28px] border border-outline-variant/10 bg-white/85 p-3 shadow-[0_18px_54px_rgba(35,24,54,0.08)] transition-all duration-300 focus-within:border-primary/20 focus-within:shadow-md">
+          <div className="flex items-end gap-3 rounded-2xl border border-outline-variant/10 bg-white p-3 shadow-sm transition-all duration-300 focus-within:border-primary/20 focus-within:shadow-md">
             <div className="ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-600/10">
               <Sparkles className="h-4 w-4 text-purple-500" />
             </div>
@@ -755,7 +738,7 @@ export function AIChatView() {
               onKeyDown={handleKeyDown}
               placeholder={`Ask ${activeProviderLabel} to plan, prioritize, or schedule something...`}
               rows={1}
-              className="max-h-32 min-h-[44px] flex-1 resize-none border-none bg-transparent py-2 text-[15px] tracking-tight text-primary outline-none placeholder:text-outline/40"
+              className="max-h-32 min-h-[40px] flex-1 resize-none border-none bg-transparent py-2 text-[15px] tracking-tight text-primary outline-none placeholder:text-outline/40"
             />
             <button
               onClick={handleSend}
