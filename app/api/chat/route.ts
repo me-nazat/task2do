@@ -270,6 +270,228 @@ function normalizeProposal(rawProposal: any): TaskProposal | null {
   };
 }
 
+function extractJsonObject(text: string) {
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return text.trim();
+}
+
+function parseJsonSafely(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function findLatestUserMessage(messages: ConversationMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'user') {
+      return messages[index];
+    }
+  }
+
+  return null;
+}
+
+function isLikelyTaskCreationRequest(messages: ConversationMessage[]) {
+  const latestUserMessage = findLatestUserMessage(messages)?.content?.toLowerCase() || '';
+
+  if (!latestUserMessage) {
+    return false;
+  }
+
+  const actionVerbPattern = /\b(schedule|add|create|plan|book|set up|put|draft|remind me|block time|time-block|make a task|create a task)\b/i;
+  const timeSignalPattern = /\b(today|tomorrow|tonight|next|this|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s?(am|pm))\b/i;
+
+  return actionVerbPattern.test(latestUserMessage) || timeSignalPattern.test(latestUserMessage);
+}
+
+function parseRequestedLocalTime(messages: ConversationMessage[]) {
+  const latestUserMessage = findLatestUserMessage(messages)?.content || '';
+  const meridiemMatch = latestUserMessage.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+
+  if (meridiemMatch) {
+    let hour = Number(meridiemMatch[1]) % 12;
+    const minute = Number(meridiemMatch[2] || '0');
+    const meridiem = meridiemMatch[3].toLowerCase();
+
+    if (meridiem === 'pm') {
+      hour += 12;
+    }
+
+    return { hour, minute };
+  }
+
+  const twentyFourHourMatch = latestUserMessage.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if (twentyFourHourMatch) {
+    return {
+      hour: Number(twentyFourHourMatch[1]),
+      minute: Number(twentyFourHourMatch[2]),
+    };
+  }
+
+  return null;
+}
+
+function getTimeZoneOffsetString(timeZone: string, referenceDate: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'shortOffset',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const timeZonePart = formatter.formatToParts(new Date(referenceDate)).find((part) => part.type === 'timeZoneName')?.value;
+  const match = timeZonePart?.match(/GMT([+-]\d{1,2})(?::?(\d{2}))?/i);
+
+  if (!match) {
+    return 'Z';
+  }
+
+  const rawHours = Number(match[1]);
+  const sign = rawHours >= 0 ? '+' : '-';
+  const hours = String(Math.abs(rawHours)).padStart(2, '0');
+  const minutes = String(Number(match[2] || '0')).padStart(2, '0');
+
+  return `${sign}${hours}:${minutes}`;
+}
+
+function reinterpretIsoAsLocalClock(dateString: string, timeZone: string) {
+  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/);
+
+  if (!match) {
+    return dateString;
+  }
+
+  const offset = getTimeZoneOffsetString(timeZone, dateString);
+  return `${match[1]}T${match[2]}${offset}`;
+}
+
+function getLocalTimeParts(dateString: string, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(new Date(dateString));
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value || '0');
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value || '0');
+
+  return { hour, minute };
+}
+
+function formatProposalWhen(proposal: TaskProposal) {
+  if (!proposal.startDate) {
+    return proposal.naturalLanguageWhen || null;
+  }
+
+  try {
+    const timeZone = proposal.timezone || 'UTC';
+    const formatter = new Intl.DateTimeFormat('en-US', proposal.isAllDay ? {
+      timeZone,
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    } : {
+      timeZone,
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    return formatter.format(new Date(proposal.startDate));
+  } catch {
+    return proposal.naturalLanguageWhen || null;
+  }
+}
+
+function stabilizeProposal(
+  proposal: TaskProposal,
+  messages: ConversationMessage[],
+  fallbackTimeZone?: string
+) {
+  const resolvedTimeZone = proposal.timezone || fallbackTimeZone || null;
+  const requestedTime = parseRequestedLocalTime(messages);
+  let startDate = proposal.startDate;
+  let endDate = proposal.endDate;
+
+  if (resolvedTimeZone && requestedTime && startDate && /Z$/i.test(startDate)) {
+    const actualLocalTime = getLocalTimeParts(startDate, resolvedTimeZone);
+
+    if (actualLocalTime.hour !== requestedTime.hour || actualLocalTime.minute !== requestedTime.minute) {
+      startDate = reinterpretIsoAsLocalClock(startDate, resolvedTimeZone);
+
+      if (endDate) {
+        endDate = reinterpretIsoAsLocalClock(endDate, resolvedTimeZone);
+      }
+    }
+  }
+
+  const stabilizedProposal: TaskProposal = {
+    ...proposal,
+    startDate,
+    endDate,
+    timezone: resolvedTimeZone,
+  };
+
+  return {
+    ...stabilizedProposal,
+    naturalLanguageWhen: stabilizedProposal.naturalLanguageWhen || formatProposalWhen(stabilizedProposal),
+  };
+}
+
+async function attemptProposalExtraction(
+  providerConfig: ProviderConfig,
+  systemPrompt: string,
+  contextualPrompt: string,
+  conversation: ReturnType<typeof formatConversation>
+) {
+  const extractionResponse = await callChatProvider(providerConfig, {
+    messages: [
+      {
+        role: 'system',
+        content: `${systemPrompt}
+
+${contextualPrompt}
+
+You are recovering from a failed tool call. Convert the user's latest actionable scheduling or task-creation request into a Task2Do task proposal.
+
+Return only a single JSON object.
+- Do not wrap the JSON in prose unless absolutely necessary.
+- Prefer status "todo" when unsure.
+- Prefer priority 0 when unsure.
+- Use null for unknown optional fields.
+- If the user specified a start time but not an end time, you may infer a sensible one-hour duration.
+- Keep the title clean and concise.
+- Use ISO-8601 strings for startDate and endDate.
+- Use one of: todo, in-progress, done for status.
+- Use one of: 0, 1, 2, 3 for priority.`,
+      },
+      ...conversation,
+    ],
+  });
+
+  const extractionText = normalizeTextContent(extractionResponse.choices?.[0]?.message?.content);
+  const jsonText = extractJsonObject(extractionText);
+  const parsed = parseJsonSafely(jsonText);
+
+  return normalizeProposal(parsed);
+}
+
 async function callChatProvider(config: ProviderConfig, body: Record<string, unknown>) {
   const response = await fetch(config.endpoint, {
     method: 'POST',
@@ -329,61 +551,37 @@ export async function POST(request: NextRequest) {
     const toolCall = assistantMessage?.tool_calls?.find(
       (call: any) => call?.function?.name === TASK_PROPOSAL_TOOL_NAME
     );
+    const parsedArguments = toolCall ? parseJsonSafely(toolCall.function?.arguments || '{}') : null;
+    const proposalFromToolCall = normalizeProposal(parsedArguments);
 
-    if (!toolCall) {
-      return NextResponse.json({
-        message: assistantText || 'I apologize, but I was unable to generate a response. Please try again.',
-        provider,
-        providerLabel: providerConfig.label,
-      });
-    }
-
-    const parsedArguments = JSON.parse(toolCall.function?.arguments || '{}');
-    const proposal = normalizeProposal(parsedArguments);
+    let proposal = proposalFromToolCall;
 
     if (!proposal) {
-      return NextResponse.json({
-        message: assistantText || 'I understood the request, but I could not prepare a reliable task draft yet. Please try rephrasing it.',
-        provider,
-        providerLabel: providerConfig.label,
-      });
+      if (isLikelyTaskCreationRequest(messages)) {
+        try {
+          proposal = await attemptProposalExtraction(
+            providerConfig,
+            systemPrompt,
+            contextualPrompt,
+            conversation
+          );
+        } catch (extractionError) {
+          console.error('Chat proposal extraction error:', extractionError);
+        }
+      }
+
+      if (!proposal) {
+        return NextResponse.json({
+          message: assistantText || 'I understood the request, but I could not prepare a reliable task draft yet. Please try rephrasing it.',
+          provider,
+          providerLabel: providerConfig.label,
+        });
+      }
     }
 
-    try {
-      const followUpResponse = await callChatProvider(providerConfig, {
-        messages: [
-          { role: 'system', content: `${systemPrompt}\n\n${contextualPrompt}` },
-          ...conversation,
-          {
-            role: 'assistant',
-            content: assistantMessage?.content ?? '',
-            tool_calls: assistantMessage?.tool_calls,
-          },
-          {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify({
-              ok: true,
-              action: 'proposal-ready',
-              note: 'The proposal will be rendered in the Task2Do UI for approval or editing before any database write happens.',
-              proposal,
-            }),
-          },
-        ],
-        tool_choice: 'none',
-      });
+    proposal = stabilizeProposal(proposal, messages, timezone);
 
-      const followUpText = normalizeTextContent(followUpResponse.choices?.[0]?.message?.content);
-
-      return NextResponse.json({
-        message: followUpText || buildFallbackProposalMessage(proposal),
-        provider,
-        providerLabel: providerConfig.label,
-        proposal,
-      });
-    } catch (followUpError) {
-      console.error('Chat follow-up formatting error:', followUpError);
-
+    if (!toolCall) {
       return NextResponse.json({
         message: buildFallbackProposalMessage(proposal),
         provider,
@@ -391,6 +589,13 @@ export async function POST(request: NextRequest) {
         proposal,
       });
     }
+
+    return NextResponse.json({
+      message: buildFallbackProposalMessage(proposal),
+      provider,
+      providerLabel: providerConfig.label,
+      proposal,
+    });
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json(
