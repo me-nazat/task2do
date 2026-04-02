@@ -58,6 +58,8 @@ export function MatrixView() {
       reminderAt: null,
       recurrence: null,
       status: 'todo' as const,
+      completedOccurrences: null,
+      deletedOccurrences: null,
       userId: user.id,
     };
     addTask(newTask);

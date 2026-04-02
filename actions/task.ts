@@ -33,6 +33,8 @@ export async function createTask(data: {
   isCompleted?: boolean;
   userId: string;
   recurrence?: string;
+  completedOccurrences?: string;
+  deletedOccurrences?: string;
 }): Promise<DatabaseActionResult<string>> {
   try {
     const id = uuidv4();
@@ -70,6 +72,8 @@ export async function createTask(data: {
       status: (data.status as any) || 'todo',
       reminderAt: data.reminderAt || null,
       recurrence: data.recurrence || null,
+      completedOccurrences: data.completedOccurrences || null,
+      deletedOccurrences: data.deletedOccurrences || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

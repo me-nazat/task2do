@@ -17,81 +17,95 @@ import { PublicDatabaseError } from '@/db/errors';
 
 export function DashboardLayout() {
   const pathname = usePathname();
-  const { isSidebarOpen, isRightPaneOpen, toggleSidebar, isCollapsed, setTasks, setLists, selectedTaskId, user, isAuthReady, setCurrentView, setSelectedListId, tasks, lists } = useStore();
+  const {
+    isSidebarOpen,
+    isRightPaneOpen,
+    toggleSidebar,
+    isCollapsed,
+    setTasks,
+    setLists,
+    selectedTaskId,
+    selectedTaskOccurrenceDate,
+    user,
+    isAuthReady,
+    setCurrentView,
+    setSelectedListId,
+    hydrateCachedData,
+  } = useStore();
   const [databaseError, setDatabaseError] = useState<PublicDatabaseError | null>(null);
 
-  // Fetch data only when auth is ready, user exists, and we don't already have cached data
   useEffect(() => {
-    if (isAuthReady && user) {
-      let isMounted = true;
-      queueMicrotask(() => {
-        if (isMounted) {
-          setDatabaseError(null);
-        }
-      });
+    if (!isAuthReady) {
+      return;
+    }
 
-      // Only fetch tasks if we don't already have them cached
-      if (tasks.length === 0) {
-        getTasks(user.id)
-          .then((result) => {
-            if (!isMounted) return;
+    let isMounted = true;
 
-            if (!result.ok) {
-              console.error('Failed to get tasks:', result.error);
-              setTasks([]);
-              setDatabaseError(result.error);
-              return;
-            }
-
-            setTasks(result.data as Task[]);
-          })
-          .catch((error) => {
-            if (!isMounted) return;
-            console.error('Unhandled task fetching error:', error);
-            setDatabaseError({
-              code: 'DB_UNAVAILABLE',
-              message: 'An unexpected connection error occurred. Please refresh the page.'
-            });
-          });
-      }
-      
-      // Only fetch lists if we don't already have them cached
-      if (lists.length === 0) {
-        getLists(user.id)
-          .then((result) => {
-            if (!isMounted) return;
-
-            if (!result.ok) {
-              console.error('Failed to get lists:', result.error);
-              setLists([]);
-              setDatabaseError((currentError) => currentError ?? result.error);
-              return;
-            }
-
-            setLists(result.data as List[]);
-          })
-          .catch((error) => {
-            if (!isMounted) return;
-            console.error('Unhandled list fetching error:', error);
-            setDatabaseError((currentError) => currentError ?? {
-              code: 'DB_UNAVAILABLE',
-              message: 'An unexpected connection error occurred. Please refresh the page.'
-            });
-          });
-      }
-
-      return () => {
-        isMounted = false;
-      };
-    } else if (isAuthReady && !user) {
-      // Clear data when user logs out
+    if (!user) {
       setTasks([]);
       setLists([]);
       queueMicrotask(() => {
         setDatabaseError(null);
       });
+      return () => {
+        isMounted = false;
+      };
     }
-  }, [setTasks, setLists, user, isAuthReady, tasks.length, lists.length]);
+
+    const hasCachedData = hydrateCachedData(user.id);
+
+    queueMicrotask(() => {
+      if (isMounted) {
+        setDatabaseError(null);
+      }
+    });
+
+    Promise.all([getTasks(user.id), getLists(user.id)])
+      .then(([taskResult, listResult]) => {
+        if (!isMounted) {
+          return;
+        }
+
+        if (!taskResult.ok) {
+          console.error('Failed to get tasks:', taskResult.error);
+          if (!hasCachedData) {
+            setTasks([]);
+          }
+          setDatabaseError(taskResult.error);
+        } else {
+          setTasks(taskResult.data as Task[]);
+        }
+
+        if (!listResult.ok) {
+          console.error('Failed to get lists:', listResult.error);
+          if (!hasCachedData) {
+            setLists([]);
+          }
+          setDatabaseError((currentError) => currentError ?? listResult.error);
+        } else {
+          setLists(listResult.data as List[]);
+        }
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return;
+        }
+
+        console.error('Unhandled dashboard data fetching error:', error);
+        if (!hasCachedData) {
+          setTasks([]);
+          setLists([]);
+        }
+        setDatabaseError({
+          code: 'DB_UNAVAILABLE',
+          message: 'An unexpected connection error occurred. Please refresh the page.',
+        });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hydrateCachedData, isAuthReady, setLists, setTasks, user]);
 
   useEffect(() => {
     const parts = pathname.split('/').filter(Boolean);
@@ -181,7 +195,7 @@ export function DashboardLayout() {
           isRightPaneOpen ? "w-96 opacity-100" : "w-0 opacity-0 border-none"
         )}
       >
-        <RightPane key={selectedTaskId} />
+        <RightPane key={`${selectedTaskId ?? 'none'}-${selectedTaskOccurrenceDate ?? 'series'}`} />
       </div>
     </div>
   );

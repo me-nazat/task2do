@@ -34,6 +34,8 @@ export const tasks = sqliteTable('tasks', {
   quadrant: text('quadrant'), // 'urgent-important', 'not-urgent-important', 'urgent-not-important', 'not-urgent-not-important'
   parentId: text('parent_id'), // Self-referencing for subtasks
   recurrence: text('recurrence'), // e.g., 'daily', 'weekly', etc.
+  completedOccurrences: text('completed_occurrences'), // JSON array of YYYY-MM-DD occurrence keys
+  deletedOccurrences: text('deleted_occurrences'), // JSON array of YYYY-MM-DD occurrence keys
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });

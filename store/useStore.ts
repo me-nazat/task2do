@@ -28,6 +28,8 @@ export interface Task {
   reminderAt: Date | null;
   status: 'todo' | 'in-progress' | 'done' | null;
   recurrence: string | null; // Can be simple string ("daily", "weekly") or JSON string for "custom"
+  completedOccurrences: string | null;
+  deletedOccurrences: string | null;
 }
 
 export interface List {
@@ -43,12 +45,14 @@ interface AppState {
   currentView: ViewType;
   selectedListId: string | null;
   selectedTaskId: string | null;
+  selectedTaskOccurrenceDate: string | null;
   isSidebarOpen: boolean;
   isRightPaneOpen: boolean;
   isCollapsed: boolean;
   searchQuery: string;
   tasks: Task[];
   lists: List[];
+  cachedTaskSnapshots: Record<string, { tasks: Task[]; lists: List[]; cachedAt: string }>;
   user: { id: string; email: string | null; displayName: string | null } | null;
   isAuthReady: boolean;
   isAuthModalOpen: boolean;
@@ -59,7 +63,7 @@ interface AppState {
   
   setCurrentView: (view: ViewType) => void;
   setSelectedListId: (id: string | null) => void;
-  setSelectedTaskId: (id: string | null) => void;
+  setSelectedTaskId: (id: string | null, occurrenceDate?: Date | string | null) => void;
   toggleSidebar: () => void;
   toggleRightPane: () => void;
   toggleCollapsed: () => void;
@@ -67,6 +71,7 @@ interface AppState {
   setSearchQuery: (query: string) => void;
   setTasks: (tasks: Task[]) => void;
   setLists: (lists: List[]) => void;
+  hydrateCachedData: (userId: string) => boolean;
   setUser: (user: { id: string; email: string | null; displayName: string | null } | null) => void;
   setAuthReady: (ready: boolean) => void;
   setAuthModalOpen: (open: boolean) => void;
@@ -99,18 +104,119 @@ const createChatSession = (ownerId: string): ChatSession => {
   };
 };
 
+const normalizeDate = (value: unknown): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value as string | number);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const normalizeTask = (task: Partial<Task> & Pick<Task, 'id' | 'title'>): Task => ({
+  id: task.id,
+  title: task.title,
+  isCompleted: task.isCompleted ?? false,
+  priority: task.priority ?? 0,
+  startDate: normalizeDate(task.startDate),
+  endDate: normalizeDate(task.endDate),
+  isAllDay: task.isAllDay ?? false,
+  listId: task.listId ?? null,
+  description: task.description ?? null,
+  quadrant: task.quadrant ?? null,
+  parentId: task.parentId ?? null,
+  timezone: task.timezone ?? null,
+  reminderAt: normalizeDate(task.reminderAt),
+  status: task.status ?? 'todo',
+  recurrence: task.recurrence ?? null,
+  completedOccurrences: task.completedOccurrences ?? null,
+  deletedOccurrences: task.deletedOccurrences ?? null,
+});
+
+const normalizeList = (list: Partial<List> & Pick<List, 'id' | 'userId' | 'name'>): List => ({
+  id: list.id,
+  userId: list.userId,
+  name: list.name,
+  color: list.color ?? null,
+  isDefault: list.isDefault ?? false,
+  createdAt: normalizeDate(list.createdAt) ?? new Date(),
+});
+
+const normalizeTasks = (tasks: Task[]) => tasks.map((task) => normalizeTask(task));
+
+const normalizeLists = (lists: List[]) => lists.map((list) => normalizeList(list));
+
+const normalizeTaskPatch = (updates: Partial<Task>): Partial<Task> => {
+  const patch: Partial<Task> = { ...updates };
+
+  if ('startDate' in updates) {
+    patch.startDate = normalizeDate(updates.startDate);
+  }
+
+  if ('endDate' in updates) {
+    patch.endDate = normalizeDate(updates.endDate);
+  }
+
+  if ('reminderAt' in updates) {
+    patch.reminderAt = normalizeDate(updates.reminderAt);
+  }
+
+  if ('completedOccurrences' in updates) {
+    patch.completedOccurrences = updates.completedOccurrences ?? null;
+  }
+
+  if ('deletedOccurrences' in updates) {
+    patch.deletedOccurrences = updates.deletedOccurrences ?? null;
+  }
+
+  return patch;
+};
+
+const normalizeOccurrenceDate = (occurrenceDate?: Date | string | null) => {
+  const date = normalizeDate(occurrenceDate);
+  return date ? date.toISOString() : null;
+};
+
+const withUserSnapshot = (state: AppState, updates: Partial<AppState>): Partial<AppState> => {
+  if ('user' in updates && updates.user === null) {
+    return updates;
+  }
+
+  const userId = updates.user?.id ?? state.user?.id;
+  if (!userId) {
+    return updates;
+  }
+
+  const nextTasks = 'tasks' in updates ? (updates.tasks as Task[]) : state.tasks;
+  const nextLists = 'lists' in updates ? (updates.lists as List[]) : state.lists;
+
+  return {
+    ...updates,
+    cachedTaskSnapshots: {
+      ...state.cachedTaskSnapshots,
+      [userId]: {
+        tasks: normalizeTasks(nextTasks),
+        lists: normalizeLists(nextLists),
+        cachedAt: new Date().toISOString(),
+      },
+    },
+  };
+};
+
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
       currentView: 'list',
       selectedListId: null,
       selectedTaskId: null,
+      selectedTaskOccurrenceDate: null,
       isSidebarOpen: true,
       isRightPaneOpen: false,
       isCollapsed: false,
       searchQuery: '',
       tasks: [],
       lists: [],
+      cachedTaskSnapshots: {},
       user: null,
       isAuthReady: false,
       isAuthModalOpen: false,
@@ -121,26 +227,88 @@ export const useStore = create<AppState>()(
 
       setCurrentView: (view) => set({ currentView: view }),
       setSelectedListId: (id) => set({ selectedListId: id }),
-      setSelectedTaskId: (id) => set({ selectedTaskId: id, isRightPaneOpen: !!id }),
+      setSelectedTaskId: (id, occurrenceDate = null) => set({
+        selectedTaskId: id,
+        selectedTaskOccurrenceDate: id ? normalizeOccurrenceDate(occurrenceDate) : null,
+        isRightPaneOpen: !!id,
+      }),
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
       toggleRightPane: () => set((state) => ({ isRightPaneOpen: !state.isRightPaneOpen })),
       toggleCollapsed: () => set((state) => ({ isCollapsed: !state.isCollapsed })),
       setCollapsed: (collapsed) => set({ isCollapsed: collapsed }),
       setSearchQuery: (query) => set({ searchQuery: query }),
-      setTasks: (tasks) => set({ tasks }),
-      setLists: (lists) => set({ lists }),
-      setUser: (user) => set({ user }),
+      setTasks: (tasks) => set((state) => withUserSnapshot(state, { tasks: normalizeTasks(tasks) })),
+      setLists: (lists) => set((state) => withUserSnapshot(state, { lists: normalizeLists(lists) })),
+      hydrateCachedData: (userId) => {
+        const snapshot = get().cachedTaskSnapshots[userId];
+        if (!snapshot) {
+          return false;
+        }
+
+        set((state) => withUserSnapshot(state, {
+          tasks: normalizeTasks(snapshot.tasks),
+          lists: normalizeLists(snapshot.lists),
+        }));
+        return true;
+      },
+      setUser: (user) => set((state) => {
+        if (!user) {
+          return {
+            user: null,
+            tasks: [],
+            lists: [],
+            selectedTaskId: null,
+            selectedTaskOccurrenceDate: null,
+            isRightPaneOpen: false,
+          };
+        }
+
+        if (state.user?.id && state.user.id !== user.id) {
+          return {
+            user,
+            tasks: [],
+            lists: [],
+            selectedTaskId: null,
+            selectedTaskOccurrenceDate: null,
+            isRightPaneOpen: false,
+          };
+        }
+
+        return { user };
+      }),
       setAuthReady: (ready) => set({ isAuthReady: ready }),
       setAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
       setChatHydrated: (hydrated) => set({ hasHydratedChat: hydrated }),
       setSelectedAIProvider: (provider) => set({ selectedAIProvider: provider }),
-      addTask: (task) => set((state) => ({ tasks: [...state.tasks, task] })),
-      addList: (list) => set((state) => ({ lists: [...state.lists, list] })),
-      updateTask: (id, updates) => set((state) => ({
-        tasks: state.tasks.map((task) => task.id === id ? { ...task, ...updates } : task)
+      addTask: (task) => set((state) => withUserSnapshot(state, {
+        tasks: [...state.tasks, normalizeTask(task)],
       })),
-      deleteTask: (id) => set((state) => ({
-        tasks: state.tasks.filter((task) => task.id !== id)
+      addList: (list) => set((state) => withUserSnapshot(state, {
+        lists: [...state.lists, normalizeList(list)],
+      })),
+      updateTask: (id, updates) => set((state) => ({
+        ...withUserSnapshot(state, {
+          tasks: state.tasks.map((task) => (
+            task.id === id
+              ? normalizeTask({
+                  ...task,
+                  ...normalizeTaskPatch(updates),
+                  id: normalizeTaskPatch(updates).id ?? task.id,
+                  title: normalizeTaskPatch(updates).title ?? task.title,
+                })
+              : task
+          )),
+        }),
+      })),
+      deleteTask: (id) => set((state) => withUserSnapshot(state, {
+        tasks: state.tasks.filter((task) => task.id !== id),
+        ...(state.selectedTaskId === id
+          ? {
+              selectedTaskId: null,
+              selectedTaskOccurrenceDate: null,
+              isRightPaneOpen: false,
+            }
+          : {}),
       })),
       ensureChatSession: (ownerId) => {
         const state = get();
@@ -234,6 +402,7 @@ export const useStore = create<AppState>()(
         chatSessions: state.chatSessions,
         activeChatSessionId: state.activeChatSessionId,
         selectedAIProvider: state.selectedAIProvider,
+        cachedTaskSnapshots: state.cachedTaskSnapshots,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setChatHydrated(true);

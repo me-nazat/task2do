@@ -5,7 +5,7 @@ import { useStore, type Task } from '@/store/useStore';
 import { Plus, CheckCircle2, Calendar as CalendarIcon, Tag, ChevronDown, Bell, Flag, LayoutDashboard, X, AlignLeft, Clock, AlertTriangle, Repeat } from 'lucide-react';
 import { createTask, updateTask } from '@/actions/task';
 import { cn } from '@/lib/utils';
-import { format, startOfDay, endOfDay, isAfter, isSameDay, isBefore, addDays, addMonths, addWeeks, isWithinInterval } from 'date-fns';
+import { format, startOfDay, endOfDay, isSameDay, isBefore, addDays, addMonths } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { MatrixView } from '@/components/views/MatrixView';
@@ -16,7 +16,13 @@ import { AIChatView } from '@/components/views/AIChatView';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { AlertBanner } from '@/components/ui/AlertBanner';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
-import { getTaskOccurrences } from '@/lib/recurrence';
+import {
+  buildTaskCompletionUpdate,
+  getNextTaskOccurrence,
+  getTaskOccurrenceForDate,
+  isTaskOccurrenceCompleted,
+  isTaskRecurring,
+} from '@/lib/recurrence';
 
 // Animation presets for consistent, smooth micro-interactions
 const viewTransition = {
@@ -39,6 +45,13 @@ const dropdownTransition = {
   exit: { opacity: 0, y: -6, scale: 0.95, filter: 'blur(4px)' },
   transition: { type: 'spring', damping: 25, stiffness: 500, mass: 0.5 },
 } as const;
+
+type VisibleTaskItem = {
+  task: Task;
+  occurrenceDate: Date | null;
+  displayDate: Date | null;
+  isCompleted: boolean;
+};
 
 export function MainContent() {
   const { toggleSidebar, currentView, selectedListId, tasks, addTask, updateTask: updateTaskState, deleteTask, setSelectedTaskId, searchQuery, user, setAuthModalOpen } = useStore();
@@ -145,6 +158,8 @@ export function MainContent() {
           ? `custom:${JSON.stringify({ days: modalRecurrenceDays, times: showCustomTimes ? modalCustomTimes : {} })}`
           : modalRecurrence === 'none' ? null : modalRecurrence,
       status: modalStatus as 'todo' | 'in-progress' | 'done',
+      completedOccurrences: null,
+      deletedOccurrences: null,
     };
     addTask(newTask);
     handleCloseAddModal();
@@ -173,134 +188,218 @@ export function MainContent() {
     }
   };
 
-  const handleToggleComplete = async (taskId: string, currentStatus: boolean | null) => {
-    const newStatus = !currentStatus;
-    updateTaskState(taskId, { isCompleted: newStatus });
+  const createVisibleTaskItem = useCallback((task: Task, occurrenceDate: Date | null = null): VisibleTaskItem => ({
+    task,
+    occurrenceDate,
+    displayDate: occurrenceDate ?? (task.startDate ? new Date(task.startDate) : null),
+    isCompleted: occurrenceDate ? isTaskOccurrenceCompleted(task, occurrenceDate) : Boolean(task.isCompleted),
+  }), []);
+
+  const selectTaskItem = useCallback((item: VisibleTaskItem) => {
+    setSelectedTaskId(item.task.id, item.occurrenceDate);
+  }, [setSelectedTaskId]);
+
+  const handleToggleComplete = async (item: VisibleTaskItem) => {
+    const previousState = {
+      isCompleted: item.task.isCompleted,
+      status: item.task.status,
+      completedOccurrences: item.task.completedOccurrences,
+      deletedOccurrences: item.task.deletedOccurrences,
+    };
+    const newStatus = !item.isCompleted;
+    const updates = buildTaskCompletionUpdate(item.task, newStatus, item.occurrenceDate);
+
+    updateTaskState(item.task.id, updates);
     try {
-      unwrapDatabaseResult(await updateTask(taskId, { isCompleted: newStatus }));
+      unwrapDatabaseResult(await updateTask(item.task.id, updates));
     } catch (error) {
       console.error('Failed to update task', error);
-      updateTaskState(taskId, { isCompleted: currentStatus });
+      updateTaskState(item.task.id, previousState);
       alert(getClientErrorMessage(error, 'Unable to update the task right now.'));
     }
   };
 
-  // ======= FIXED FILTERING LOGIC =======
-  // Memoize the "now" value per render to keep consistency
-  const now = useMemo(() => new Date(), [tasks, currentView, upcomingFilter, inboxFilter, searchQuery]);
-
-  const isTaskToday = useCallback((task: Task) => {
-    return getTaskOccurrences(task, startOfDay(now), endOfDay(now)).length > 0;
-  }, [now]);
+  const nowSeed = `${currentView}:${inboxFilter}:${upcomingFilter}:${searchQuery}:${tasks.length}`;
+  const now = useMemo(() => {
+    void nowSeed;
+    return new Date();
+  }, [nowSeed]);
 
   const filteredTasks = useMemo(() => {
-    const filtered = tasks.filter(task => {
-      if (task.parentId) return false;
+    const startOfTomorrow = new Date(endOfDay(now).getTime() + 1);
+    const isInboxSelected = !selectedListId || selectedListId === 'inbox';
+
+    const items = tasks.flatMap((task) => {
+      if (task.parentId) return [];
       if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false;
+        return [];
       }
 
       if (currentView === 'today') {
-        return isTaskToday(task);
+        const occurrence = getTaskOccurrenceForDate(task, now, {
+          includeCompleted: false,
+          includeDeleted: false,
+        });
+        return occurrence ? [createVisibleTaskItem(task, occurrence.date)] : [];
       }
 
       if (currentView === 'upcoming') {
-        // "Upcoming" = everything EXCEPT today's tasks
-        if (isTaskToday(task)) return false;
-        // Completed tasks are hidden from upcoming
-        if (task.isCompleted) return false;
-
         if (upcomingFilter === 'all') {
-          // Show ALL tasks that are not scheduled for today
-          return true;
+          if (!task.startDate) {
+            return task.isCompleted ? [] : [createVisibleTaskItem(task)];
+          }
+
+          const nextOccurrence = getNextTaskOccurrence(
+            task,
+            startOfTomorrow,
+            undefined,
+            { includeCompleted: false, includeDeleted: false }
+          );
+
+          if (nextOccurrence) {
+            return [createVisibleTaskItem(task, nextOccurrence.date)];
+          }
+
+          const occursToday = getTaskOccurrenceForDate(task, now, {
+            includeCompleted: false,
+            includeDeleted: false,
+          });
+
+          if (occursToday || task.isCompleted) {
+            return [];
+          }
+
+          return !isTaskRecurring(task) ? [createVisibleTaskItem(task)] : [];
         }
-        if (upcomingFilter === 'this-week') {
-          // Tasks dated within the next 7 days (not today) + undated tasks
-          const taskDate = task.startDate ? new Date(task.startDate) : null;
-          const range = { start: endOfDay(now), end: endOfDay(addDays(now, 7)) };
-          return getTaskOccurrences(task, range.start, range.end).length > 0;
+
+        const rangeEnd = upcomingFilter === 'this-week'
+          ? endOfDay(addDays(now, 7))
+          : endOfDay(addMonths(now, 1));
+
+        if (!task.startDate) {
+          return upcomingFilter === 'this-month' && !task.isCompleted
+            ? [createVisibleTaskItem(task)]
+            : [];
         }
-        if (upcomingFilter === 'this-month') {
-          // Tasks dated within the next 30 days (not today) + tasks with NO date
-          if (!task.startDate) return true; // undated tasks go to "This Month"
-          const taskDate = task.startDate ? new Date(task.startDate) : null;
-          const range = { start: endOfDay(now), end: endOfDay(addMonths(now, 1)) };
-          return getTaskOccurrences(task, range.start, range.end).length > 0;
-        }
-        return true;
+
+        const nextOccurrence = getNextTaskOccurrence(
+          task,
+          startOfTomorrow,
+          rangeEnd,
+          { includeCompleted: false, includeDeleted: false }
+        );
+
+        return nextOccurrence ? [createVisibleTaskItem(task, nextOccurrence.date)] : [];
       }
 
       if (currentView === 'list') {
-        // FIX: treat 'inbox' selectedListId as null (the actual inbox)
-        const isInboxSelected = !selectedListId || selectedListId === 'inbox';
-
         if (!isInboxSelected && selectedListId) {
-          // A specific collection/list is selected
-          return task.listId === selectedListId;
+          return task.listId === selectedListId ? [createVisibleTaskItem(task)] : [];
         }
 
-        // Inbox view: show tasks without a listId (or listId === 'inbox')
         const isInboxTask = !task.listId || task.listId === 'inbox';
-        if (!isInboxTask) return false;
+        if (!isInboxTask) return [];
 
         if (inboxFilter === 'day') {
-          return isTaskToday(task);
+          const occurrence = getTaskOccurrenceForDate(task, now, {
+            includeCompleted: false,
+            includeDeleted: false,
+          });
+          return occurrence ? [createVisibleTaskItem(task, occurrence.date)] : [];
         }
+
         if (inboxFilter === 'week') {
-          if (!task.startDate) return true;
-          const range = { start: startOfDay(now), end: endOfDay(addDays(now, 7)) };
-          return getTaskOccurrences(task, range.start, range.end).length > 0;
+          if (!task.startDate) return [createVisibleTaskItem(task)];
+
+          const occurrence = getNextTaskOccurrence(
+            task,
+            startOfDay(now),
+            endOfDay(addDays(now, 7)),
+            { includeCompleted: false, includeDeleted: false }
+          );
+          return occurrence ? [createVisibleTaskItem(task, occurrence.date)] : [];
         }
+
         if (inboxFilter === 'month') {
-          if (!task.startDate) return true;
-          const range = { start: startOfDay(now), end: endOfDay(addMonths(now, 1)) };
-          return getTaskOccurrences(task, range.start, range.end).length > 0;
+          if (!task.startDate) return [createVisibleTaskItem(task)];
+
+          const occurrence = getNextTaskOccurrence(
+            task,
+            startOfDay(now),
+            endOfDay(addMonths(now, 1)),
+            { includeCompleted: false, includeDeleted: false }
+          );
+          return occurrence ? [createVisibleTaskItem(task, occurrence.date)] : [];
         }
-        return true; // 'all'
+
+        return [createVisibleTaskItem(task)];
       }
-      return true;
+
+      return [createVisibleTaskItem(task)];
     });
 
-    // BUG 1 FIX: Sort Inbox tasks chronologically by date/time (ascending)
-    if (currentView === 'list' && (!selectedListId || selectedListId === 'inbox')) {
-      return [...filtered].sort((a, b) => {
-        if (!a.startDate && !b.startDate) return 0;
-        if (!a.startDate) return 1;
-        if (!b.startDate) return -1;
-        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-      });
+    return items.sort((a, b) => {
+      if (!a.displayDate && !b.displayDate) return 0;
+      if (!a.displayDate) return 1;
+      if (!b.displayDate) return -1;
+      return a.displayDate.getTime() - b.displayDate.getTime();
+    });
+  }, [
+    createVisibleTaskItem,
+    currentView,
+    inboxFilter,
+    now,
+    searchQuery,
+    selectedListId,
+    tasks,
+    upcomingFilter,
+  ]);
+
+  const reminderTasks = useMemo(() => tasks.flatMap((task) => {
+    if (task.parentId || task.isCompleted || !task.reminderAt) {
+      return [];
     }
 
-    return filtered;
-  }, [tasks, currentView, selectedListId, searchQuery, inboxFilter, upcomingFilter, now, isTaskToday]);
-
-  // Get tasks with upcoming reminders (used in Inbox view Reminders Box)
-  const reminderTasks = useMemo(() => tasks.filter(task => {
-    if (task.parentId || task.isCompleted) return false;
-    if (!task.reminderAt) return false;
     const reminderDate = new Date(task.reminderAt);
-    return isBefore(reminderDate, addDays(now, 1));
-  }), [tasks, now]);
+    return isBefore(reminderDate, addDays(now, 1)) ? [createVisibleTaskItem(task)] : [];
+  }), [createVisibleTaskItem, now, tasks]);
 
-  // Due Today / Overdue / Tight Deadline tasks for Inbox Reminders Box
-  const urgentTasks = useMemo(() => tasks.filter(task => {
-    if (task.parentId || task.isCompleted) return false;
-    if (!task.startDate) return false;
+  const urgentTasks = useMemo(() => tasks.flatMap((task) => {
+    if (task.parentId) {
+      return [];
+    }
+
+    if (isTaskRecurring(task)) {
+      const occurrence = getTaskOccurrenceForDate(task, now, {
+        includeCompleted: false,
+        includeDeleted: false,
+      });
+
+      return occurrence ? [createVisibleTaskItem(task, occurrence.date)] : [];
+    }
+
+    if (task.isCompleted || !task.startDate) {
+      return [];
+    }
+
     const taskDate = new Date(task.startDate);
-    return isBefore(taskDate, endOfDay(now)) || isSameDay(taskDate, now);
-  }), [tasks, now]);
+    return isBefore(taskDate, endOfDay(now)) || isSameDay(taskDate, now)
+      ? [createVisibleTaskItem(task)]
+      : [];
+  }), [createVisibleTaskItem, now, tasks]);
 
-  // Combine reminder tasks and urgent tasks for the Inbox Reminders Box
   const inboxAlertTasks = useMemo(() => [...new Map(
-    [...urgentTasks, ...reminderTasks].map(t => [t.id, t])
+    [...urgentTasks, ...reminderTasks].map((item) => [
+      `${item.task.id}-${item.occurrenceDate?.toISOString() ?? 'base'}`,
+      item,
+    ])
   ).values()], [urgentTasks, reminderTasks]);
 
-  // Completed tasks for the Completed & Reminders view
-  const completedTasks = useMemo(() => tasks.filter(task => {
-    if (task.parentId) return false;
-    if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return task.isCompleted;
-  }), [tasks, searchQuery]);
+  const completedTasks = useMemo(() => tasks.flatMap((task) => {
+    if (task.parentId || isTaskRecurring(task)) return [];
+    if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) return [];
+    return task.isCompleted ? [createVisibleTaskItem(task)] : [];
+  }), [createVisibleTaskItem, searchQuery, tasks]);
 
   const getViewTitle = () => {
     if (currentView === 'today') return 'Today';
@@ -328,12 +427,11 @@ export function MainContent() {
     'this-month': 'This Month',
   };
 
-  const getUrgencyLabel = (task: typeof tasks[0]) => {
-    if (!task.startDate) return null;
-    const taskDate = new Date(task.startDate);
-    if (isBefore(taskDate, startOfDay(now))) return 'Overdue';
-    if (isSameDay(taskDate, now)) return 'Due Today';
-    if (task.reminderAt && isBefore(new Date(task.reminderAt), now)) return 'Reminder Overdue';
+  const getUrgencyLabel = (item: VisibleTaskItem) => {
+    if (!item.displayDate) return null;
+    if (isBefore(item.displayDate, startOfDay(now))) return 'Overdue';
+    if (isSameDay(item.displayDate, now)) return 'Due Today';
+    if (item.task.reminderAt && isBefore(new Date(item.task.reminderAt), now)) return 'Reminder Overdue';
     return 'Due Soon';
   };
 
@@ -396,15 +494,15 @@ export function MainContent() {
                     icon={AlertTriangle}
                     colorScheme="red"
                   >
-                        {inboxAlertTasks.map((task, index) => {
-                          const urgency = getUrgencyLabel(task);
+                        {inboxAlertTasks.map((item, index) => {
+                          const urgency = getUrgencyLabel(item);
                           return (
                             <motion.div
-                              key={task.id}
+                              key={`${item.task.id}-${item.occurrenceDate?.toISOString() ?? 'base'}`}
                               initial={{ opacity: 0, x: -8 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              onClick={() => setSelectedTaskId(task.id)}
+                              onClick={() => selectTaskItem(item)}
                               className="group flex items-center gap-4 p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-red-200/20 hover:border-red-300/50 hover:shadow-md hover:bg-white transition-all duration-200 cursor-pointer"
                             >
                               <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
@@ -415,16 +513,16 @@ export function MainContent() {
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[14px] font-body font-medium text-on-surface truncate">{task.title}</p>
+                                <p className="text-[14px] font-body font-medium text-on-surface truncate">{item.task.title}</p>
                                 <div className="flex items-center gap-2 mt-1">
                                   {urgency && (
                                     <span className={cn("text-[8px] font-label font-bold tracking-[0.15em] uppercase px-2 py-0.5 rounded-full border", getUrgencyColor(urgency))}>
                                       {urgency}
                                     </span>
                                   )}
-                                  {task.startDate && (
+                                  {item.displayDate && (
                                     <span className="text-[9px] font-label font-bold tracking-[0.1em] uppercase text-outline/50">
-                                      {format(new Date(task.startDate), 'MMM d, hh:mm a')}
+                                      {format(item.displayDate, 'MMM d, hh:mm a')}
                                     </span>
                                   )}
                                 </div>
@@ -446,23 +544,23 @@ export function MainContent() {
                     icon={Bell}
                     colorScheme="amber"
                   >
-                        {reminderTasks.map((task, index) => (
+                        {reminderTasks.map((item, index) => (
                           <motion.div
-                            key={task.id}
+                            key={`${item.task.id}-${item.occurrenceDate?.toISOString() ?? 'base'}`}
                             initial={{ opacity: 0, x: -8 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            onClick={() => setSelectedTaskId(task.id)}
+                            onClick={() => selectTaskItem(item)}
                             className="group flex items-center gap-4 p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-amber-200/30 hover:border-amber-300/60 hover:shadow-md hover:bg-white transition-all duration-200 cursor-pointer"
                           >
                             <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                               <Bell className="w-4 h-4 text-amber-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-body font-medium text-amber-900 truncate">{task.title}</p>
-                              {task.reminderAt && (
+                              <p className="text-[14px] font-body font-medium text-amber-900 truncate">{item.task.title}</p>
+                              {item.task.reminderAt && (
                                 <p className="text-[9px] font-label font-bold tracking-[0.15em] uppercase text-amber-600/60 mt-0.5">
-                                  {isBefore(new Date(task.reminderAt), now) ? 'Overdue' : format(new Date(task.reminderAt), 'hh:mm a')}
+                                  {isBefore(new Date(item.task.reminderAt), now) ? 'Overdue' : format(new Date(item.task.reminderAt), 'hh:mm a')}
                                 </p>
                               )}
                             </div>
@@ -563,44 +661,44 @@ export function MainContent() {
                   
                   <div className="space-y-3">
                     <AnimatePresence mode="popLayout">
-                    {filteredTasks.map((task, index) => (
+                    {filteredTasks.map((item, index) => (
                       <motion.div 
                         layout
                         {...listItemTransition}
                         transition={{ ...listItemTransition.transition, delay: index * 0.03 }}
-                        key={task.id}
-                        onClick={() => setSelectedTaskId(task.id)}
+                        key={`${item.task.id}-${item.occurrenceDate?.toISOString() ?? 'base'}`}
+                        onClick={() => selectTaskItem(item)}
                         className={cn(
                           "group flex items-center justify-between p-5 bg-white rounded-xl cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md active:scale-[0.99]",
                           "transition-[border-color,box-shadow,transform] duration-200",
-                          task.isCompleted && "opacity-60 grayscale-[0.5]"
+                          item.isCompleted && "opacity-60 grayscale-[0.5]"
                         )}
                       >
                         <div className="flex items-center gap-6">
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleToggleComplete(task.id, task.isCompleted);
+                              handleToggleComplete(item);
                             }}
                             className={cn(
                               "w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center transition-all duration-200 group-hover:border-primary active:scale-90",
-                              task.isCompleted ? "bg-primary border-primary" : "bg-transparent hover:bg-primary/5"
+                              item.isCompleted ? "bg-primary border-primary" : "bg-transparent hover:bg-primary/5"
                             )}
                           >
-                            {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />}
+                            {item.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />}
                           </button>
                           <div>
                             <p className={cn(
                               "text-[15px] font-body transition-all duration-200",
-                              task.isCompleted ? "text-outline line-through" : "text-primary font-medium"
+                              item.isCompleted ? "text-outline line-through" : "text-primary font-medium"
                             )}>
-                              {task.title}
+                              {item.task.title}
                             </p>
-                            {task.startDate && (
+                            {item.displayDate && (
                               <div className="flex items-center gap-2 mt-1.5">
                                 <CalendarIcon className="w-3 h-3 text-outline/60" />
                                 <span className="text-[9px] font-label uppercase tracking-[0.15em] text-outline font-bold opacity-60">
-                                  {format(new Date(task.startDate), 'MMM d · hh:mm a')}
+                                  {format(item.displayDate, 'MMM d · hh:mm a')}
                                 </span>
                               </div>
                             )}
@@ -640,7 +738,7 @@ export function MainContent() {
                 <div className="mb-6">
                   <AlertBanner
                     title="Success Summary"
-                    subtitle={`${tasks.filter(t => t.isCompleted).length} total objectives completed`}
+                    subtitle={`${completedTasks.length} total objectives completed`}
                     icon={CheckCircle2}
                     colorScheme="green"
                   />
@@ -654,23 +752,23 @@ export function MainContent() {
                     icon={Bell}
                     colorScheme="amber"
                   >
-                        {reminderTasks.map((task, index) => (
+                        {reminderTasks.map((item, index) => (
                           <motion.div
-                            key={task.id}
+                            key={`${item.task.id}-${item.occurrenceDate?.toISOString() ?? 'base'}`}
                             initial={{ opacity: 0, x: -8 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            onClick={() => setSelectedTaskId(task.id)}
+                            onClick={() => selectTaskItem(item)}
                             className="group flex items-center gap-4 p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-amber-200/30 hover:border-amber-300/60 hover:shadow-md hover:bg-white transition-all duration-200 cursor-pointer"
                           >
                             <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                               <Bell className="w-4 h-4 text-amber-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-body font-medium text-amber-900 truncate">{task.title}</p>
-                              {task.reminderAt && (
+                              <p className="text-[14px] font-body font-medium text-amber-900 truncate">{item.task.title}</p>
+                              {item.task.reminderAt && (
                                 <p className="text-[9px] font-label font-bold tracking-[0.15em] uppercase text-amber-600/60 mt-0.5">
-                                  {isBefore(new Date(task.reminderAt), now) ? 'Overdue' : format(new Date(task.reminderAt), 'MMM d, hh:mm a')}
+                                  {isBefore(new Date(item.task.reminderAt), now) ? 'Overdue' : format(new Date(item.task.reminderAt), 'MMM d, hh:mm a')}
                                 </p>
                               )}
                             </div>
@@ -696,32 +794,32 @@ export function MainContent() {
                   
                   <div className="space-y-3">
                     <AnimatePresence mode="popLayout">
-                    {completedTasks.map((task, index) => (
+                    {completedTasks.map((item, index) => (
                       <motion.div 
                         layout
                         {...listItemTransition}
                         transition={{ ...listItemTransition.transition, delay: index * 0.03 }}
-                        key={task.id}
-                        onClick={() => setSelectedTaskId(task.id)}
+                        key={`${item.task.id}-${item.occurrenceDate?.toISOString() ?? 'base'}`}
+                        onClick={() => selectTaskItem(item)}
                         className="group flex items-center justify-between p-5 bg-white rounded-xl cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md opacity-70 transition-[border-color,box-shadow,opacity] duration-200 active:scale-[0.99]"
                       >
                         <div className="flex items-center gap-6">
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleToggleComplete(task.id, task.isCompleted);
+                              handleToggleComplete(item);
                             }}
                             className="w-6 h-6 rounded-full bg-primary border-primary flex items-center justify-center transition-all duration-200 active:scale-90"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />
                           </button>
                           <div>
-                            <p className="text-[15px] font-body text-outline line-through">{task.title}</p>
-                            {task.startDate && (
+                            <p className="text-[15px] font-body text-outline line-through">{item.task.title}</p>
+                            {item.displayDate && (
                               <div className="flex items-center gap-2 mt-1.5">
                                 <CalendarIcon className="w-3 h-3 text-outline/60" />
                                 <span className="text-[9px] font-label uppercase tracking-[0.15em] text-outline font-bold opacity-60">
-                                  {format(new Date(task.startDate), 'MMM d, yyyy')}
+                                  {format(item.displayDate, 'MMM d, yyyy')}
                                 </span>
                               </div>
                             )}

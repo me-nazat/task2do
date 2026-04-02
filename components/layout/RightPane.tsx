@@ -8,11 +8,26 @@ import { cn } from '@/lib/utils';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
+import { buildTaskCompletionUpdate, buildTaskOccurrenceDeleteUpdate, isTaskOccurrenceCompleted, isTaskRecurring } from '@/lib/recurrence';
+import { format } from 'date-fns';
 
 export function RightPane() {
-  const { selectedTaskId, setSelectedTaskId, tasks, updateTask: updateTaskState, deleteTask: deleteTaskState, user } = useStore();
+  const {
+    selectedTaskId,
+    selectedTaskOccurrenceDate,
+    setSelectedTaskId,
+    tasks,
+    updateTask: updateTaskState,
+    deleteTask: deleteTaskState,
+    user,
+  } = useStore();
   
   const task = tasks.find(t => t.id === selectedTaskId);
+  const selectedOccurrenceDate = selectedTaskOccurrenceDate ? new Date(selectedTaskOccurrenceDate) : null;
+  const isOccurrenceScopedRecurringTask = Boolean(task && selectedOccurrenceDate && isTaskRecurring(task));
+  const selectedOccurrenceCompleted = task && selectedOccurrenceDate
+    ? isTaskOccurrenceCompleted(task, selectedOccurrenceDate)
+    : Boolean(task?.isCompleted);
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -44,6 +59,8 @@ export function RightPane() {
       status: 'todo' as const,
       userId: user.id,
       recurrence: null,
+      completedOccurrences: null,
+      deletedOccurrences: null,
     };
 
     useStore.getState().addTask(newSubtask);
@@ -98,6 +115,26 @@ export function RightPane() {
   };
 
   const handleDelete = async () => {
+    if (isOccurrenceScopedRecurringTask && selectedOccurrenceDate) {
+      const previousState = {
+        isCompleted: task.isCompleted,
+        completedOccurrences: task.completedOccurrences,
+        deletedOccurrences: task.deletedOccurrences,
+      };
+      const updates = buildTaskOccurrenceDeleteUpdate(task, selectedOccurrenceDate);
+
+      updateTaskState(task.id, updates);
+      setSelectedTaskId(null);
+
+      try {
+        unwrapDatabaseResult(await updateTask(task.id, updates));
+      } catch (error) {
+        updateTaskState(task.id, previousState);
+        alert(getClientErrorMessage(error, 'Unable to remove this occurrence right now.'));
+      }
+      return;
+    }
+
     deleteTaskState(task.id);
     setSelectedTaskId(null);
     try {
@@ -119,7 +156,7 @@ export function RightPane() {
           <button 
             onClick={handleDelete}
             className="p-2.5 hover:bg-error/10 hover:text-error rounded-full text-outline/60 transition-all"
-            title="Archive Objective"
+            title={isOccurrenceScopedRecurringTask ? 'Remove This Occurrence' : 'Archive Objective'}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -309,9 +346,35 @@ export function RightPane() {
             </div>
             <div className="flex-1 min-w-0">
               <select
-                value={task.status || 'todo'}
+                value={
+                  isOccurrenceScopedRecurringTask
+                    ? (selectedOccurrenceCompleted ? 'done' : (task.status === 'done' ? 'todo' : (task.status || 'todo')))
+                    : (task.status || 'todo')
+                }
                 onChange={async (e) => {
                   const status = e.target.value as any;
+                  if (isOccurrenceScopedRecurringTask && selectedOccurrenceDate) {
+                    const previousState = {
+                      status: task.status,
+                      isCompleted: task.isCompleted,
+                      completedOccurrences: task.completedOccurrences,
+                      deletedOccurrences: task.deletedOccurrences,
+                    };
+                    const completionUpdates = buildTaskCompletionUpdate(task, status === 'done', selectedOccurrenceDate);
+                    const updates = status === 'done'
+                      ? completionUpdates
+                      : { ...completionUpdates, status };
+
+                    updateTaskState(task.id, updates);
+                    try {
+                      unwrapDatabaseResult(await updateTask(task.id, updates));
+                    } catch (error) {
+                      updateTaskState(task.id, previousState);
+                      alert(getClientErrorMessage(error, 'Unable to update that occurrence right now.'));
+                    }
+                    return;
+                  }
+
                   const isCompleted = status === 'done';
                   updateTaskState(task.id, { status, isCompleted });
                   try {
@@ -472,7 +535,9 @@ export function RightPane() {
       {/* Footer Actions */}
       <div className="p-8 border-t border-outline-variant/30 flex items-center justify-between shrink-0 bg-surface-container-low/50">
         <span className="text-[8px] font-label font-bold tracking-[0.25em] uppercase text-outline/40 italic">
-          Initiated {task.id.startsWith('temp') ? 'just now' : 'in recent history'}
+          {isOccurrenceScopedRecurringTask && selectedOccurrenceDate
+            ? `Viewing ${format(selectedOccurrenceDate, 'MMM d, yyyy')} occurrence`
+            : `Initiated ${task.id.startsWith('temp') ? 'just now' : 'in recent history'}`}
         </span>
       </div>
     </div>

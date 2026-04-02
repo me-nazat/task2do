@@ -206,6 +206,8 @@ export function AIChatView() {
       reminderAt,
       recurrence: proposal.recurrence,
       status: proposal.status,
+      completedOccurrences: null,
+      deletedOccurrences: null,
     };
   };
 

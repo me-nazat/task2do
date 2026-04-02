@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useStore, Task } from '@/store/useStore';
 import { 
   format, 
@@ -10,7 +10,6 @@ import {
   endOfWeek, 
   eachDayOfInterval, 
   isSameMonth, 
-  isSameDay, 
   addMonths, 
   subMonths,
   isToday,
@@ -22,20 +21,21 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
-import { getTaskOccurrences } from '@/lib/recurrence';
+import { buildTaskCompletionUpdate, getTaskOccurrences } from '@/lib/recurrence';
+
+type CalendarDayItem = {
+  task: Task;
+  occurrenceDate: Date;
+  occurrenceKey: string;
+  isCompleted: boolean;
+};
 
 export function CalendarView() {
   const { tasks, setSelectedTaskId, user, addTask, updateTask: updateTaskState, deleteTask } = useStore();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [calendarKey, setCalendarKey] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // BUG 2 FIX: Force re-render when month changes
-  useEffect(() => {
-    setCalendarKey(prev => prev + 1);
-  }, [currentMonth]);
 
   // Expandable details state
   const [showDetails, setShowDetails] = useState(false);
@@ -90,6 +90,8 @@ export function CalendarView() {
         reminderAt: null,
         status: showDetails ? calendarStatus : 'todo',
         recurrence: recurrenceValue,
+        completedOccurrences: null,
+        deletedOccurrences: null,
       };
       addTask(newTask);
 
@@ -116,14 +118,42 @@ export function CalendarView() {
     }
   };
 
-  const handleToggleComplete = async (taskId: string, currentStatus: boolean | null) => {
-    const newStatus = !currentStatus;
-    updateTaskState(taskId, { isCompleted: newStatus });
+  const getDayTaskItems = useCallback((day: Date) => (
+    tasks
+      .flatMap((task) => (
+        getTaskOccurrences(task, startOfDay(day), endOfDay(day), {
+          includeCompleted: true,
+          includeDeleted: false,
+        }).map((occurrence) => ({
+          task,
+          occurrenceDate: occurrence.date,
+          occurrenceKey: occurrence.occurrenceKey,
+          isCompleted: occurrence.isCompleted,
+        }))
+      ))
+      .sort((a, b) => {
+        const timeDifference = a.occurrenceDate.getTime() - b.occurrenceDate.getTime();
+        return timeDifference !== 0
+          ? timeDifference
+          : a.task.title.localeCompare(b.task.title);
+      })
+  ), [tasks]);
+
+  const handleToggleComplete = async (item: CalendarDayItem) => {
+    const previousState = {
+      isCompleted: item.task.isCompleted,
+      status: item.task.status,
+      completedOccurrences: item.task.completedOccurrences,
+      deletedOccurrences: item.task.deletedOccurrences,
+    };
+    const updates = buildTaskCompletionUpdate(item.task, !item.isCompleted, item.occurrenceDate);
+
+    updateTaskState(item.task.id, updates);
     try {
-      unwrapDatabaseResult(await updateTask(taskId, { isCompleted: newStatus }));
+      unwrapDatabaseResult(await updateTask(item.task.id, updates));
     } catch (error) {
       console.error('Failed to update task', error);
-      updateTaskState(taskId, { isCompleted: currentStatus }); // Revert
+      updateTaskState(item.task.id, previousState);
       alert(getClientErrorMessage(error, 'Unable to update the task right now.'));
     }
   };
@@ -142,6 +172,10 @@ export function CalendarView() {
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const selectedDayTasks = useMemo(
+    () => (selectedDate ? getDayTaskItems(selectedDate) : []),
+    [getDayTaskItems, selectedDate]
+  );
 
   return (
     <div className="flex flex-col h-full bg-white rounded-3xl border border-outline-variant/10 shadow-sm overflow-hidden">
@@ -186,7 +220,8 @@ export function CalendarView() {
       {/* Calendar Grid */}
       <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto bg-white hide-scrollbar">
         {calendarDays.map((day, idx) => {
-          const dayTasks = tasks.filter(t => getTaskOccurrences(t, startOfDay(day), endOfDay(day)).length > 0);
+          const dayTasks = getDayTaskItems(day);
+          const visibleDayTasks = dayTasks.slice(0, 5);
           const isCurrentMonth = isSameMonth(day, monthStart);
           const isCurrentDay = isToday(day);
 
@@ -195,14 +230,14 @@ export function CalendarView() {
               key={day.toString()}
               onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
               className={cn(
-                "min-h-[160px] p-4 border-r border-b border-outline-variant/10 flex flex-col gap-3 transition-all hover:bg-primary/[0.02] cursor-pointer",
+                "min-h-[13.5rem] border-r border-b border-outline-variant/10 p-3.5 grid grid-rows-[auto_minmax(0,1fr)] gap-2.5 transition-all hover:bg-primary/[0.02] cursor-pointer",
                 !isCurrentMonth && "bg-primary/[0.01] opacity-30",
                 idx % 7 === 6 && "border-r-0"
               )}
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between">
                 <span className={cn(
-                  "text-[13px] font-body font-bold w-9 h-9 flex items-center justify-center rounded-full transition-all",
+                  "flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-body font-bold transition-all",
                   isCurrentDay ? "bg-primary text-on-primary shadow-md" : "text-primary/60"
                 )}>
                   {format(day, 'd')}
@@ -214,28 +249,25 @@ export function CalendarView() {
                 )}
               </div>
 
-              <div className="flex flex-col gap-2 overflow-y-auto max-h-[140px] hide-scrollbar">
-                {/* BUG 3 FIX: Limit displayed tasks to 5, hide overflow */}
-                {dayTasks.slice(0, 5).map(task => (
+              <div className="grid min-h-0 grid-rows-5 gap-1.5 overflow-hidden">
+                {visibleDayTasks.map((item) => (
                   <motion.div
-                    layoutId={task.id}
-                    key={task.id}
-                    onClick={() => setSelectedTaskId(task.id)}
+                    layoutId={`${item.task.id}-${item.occurrenceKey}`}
+                    key={`${item.task.id}-${item.occurrenceKey}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedTaskId(item.task.id, item.occurrenceDate);
+                    }}
                     className={cn(
-                      "text-[11px] px-3.5 py-2.5 rounded-lg border truncate cursor-pointer transition-all hover:shadow-sm font-body font-medium leading-tight",
-                      task.isCompleted 
+                      "flex min-h-0 items-center overflow-hidden rounded-lg border px-2.5 py-1.5 text-[10px] font-body font-medium leading-[1.15] transition-all hover:shadow-sm",
+                      item.isCompleted 
                         ? "bg-primary/5 text-outline/60 line-through border-transparent" 
                         : "bg-primary/5 text-primary border-primary/10 hover:border-primary/30"
                     )}
                   >
-                    {task.title}
+                    <span className="block truncate">{item.task.title}</span>
                   </motion.div>
                 ))}
-                {dayTasks.length > 5 && (
-                  <div className="text-[9px] font-label font-bold tracking-[0.1em] uppercase text-outline/40 text-center py-1">
-                    +{dayTasks.length - 5} more
-                  </div>
-                )}
               </div>
             </div>
           );
@@ -513,61 +545,55 @@ export function CalendarView() {
               </AnimatePresence>
 
               <div className="p-8 overflow-y-auto space-y-3 bg-surface-container-lowest/30">
-                {(() => {
-                  const dayTasks = tasks.filter(t => getTaskOccurrences(t, startOfDay(selectedDate), endOfDay(selectedDate)).length > 0);
-                  
-                  if (dayTasks.length === 0) {
-                    return (
-                      <div className="text-center py-16 text-outline flex flex-col items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center">
-                          <CheckCircle2 className="w-6 h-6 text-outline/40" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-headline italic text-primary">Clear Schedule</p>
-                          <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">No objectives logged for this exact date</p>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return dayTasks.map(task => (
+                {selectedDayTasks.length === 0 ? (
+                  <div className="text-center py-16 text-outline flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center">
+                      <CheckCircle2 className="w-6 h-6 text-outline/40" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-headline italic text-primary">Clear Schedule</p>
+                      <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">No objectives logged for this exact date</p>
+                    </div>
+                  </div>
+                ) : (
+                  selectedDayTasks.map((item) => (
                     <div 
-                      key={task.id}
+                      key={`${item.task.id}-${item.occurrenceKey}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedTaskId(task.id);
-                        setSelectedDate(null); // Optional: close modal when opening task details
+                        setSelectedTaskId(item.task.id, item.occurrenceDate);
+                        setSelectedDate(null);
                       }}
                       className={cn(
                         "group flex items-center justify-between p-5 bg-white rounded-xl transition-all cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md",
-                        task.isCompleted && "opacity-60 grayscale-[0.5]"
+                        item.isCompleted && "opacity-60 grayscale-[0.5]"
                       )}
                     >
                       <div className="flex items-center gap-6">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleToggleComplete(task.id, task.isCompleted);
+                            handleToggleComplete(item);
                           }}
                           className={cn(
                             "w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center transition-all group-hover:border-primary",
-                            task.isCompleted ? "bg-primary border-primary" : "bg-transparent"
+                            item.isCompleted ? "bg-primary border-primary" : "bg-transparent"
                           )}
                         >
-                          {task.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />}
+                          {item.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />}
                         </button>
                         <div>
                           <p className={cn(
                             "text-[15px] font-body transition-all",
-                            task.isCompleted ? "text-outline line-through" : "text-primary font-medium"
+                            item.isCompleted ? "text-outline line-through" : "text-primary font-medium"
                           )}>
-                            {task.title}
+                            {item.task.title}
                           </p>
                         </div>
                       </div>
                     </div>
-                  ));
-                })()}
+                  ))
+                )}
               </div>
             </motion.div>
           </motion.div>
