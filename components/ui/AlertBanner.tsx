@@ -67,13 +67,13 @@ export function AlertBanner({ title, subtitle, icon: Icon, colorScheme = 'red', 
       <div className={cn("absolute top-0 right-0 w-40 h-40 rounded-full blur-3xl bg-gradient-to-bl", scheme.blob1, "to-transparent")} />
       <div className={cn("absolute bottom-0 left-0 w-32 h-32 rounded-full blur-2xl bg-gradient-to-tr", scheme.blob2, "to-transparent")} />
       
-      <div className="relative p-8">
-        <div className="flex items-center gap-3 mb-6">
+      <div className="relative p-4 sm:p-6 lg:p-8">
+        <div className="flex items-center gap-3 mb-3 sm:mb-6">
           <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shadow-md bg-gradient-to-br", scheme.iconBg)}>
             <Icon className={cn("w-5 h-5", scheme.iconColor)} />
           </div>
           <div>
-            <h3 className={cn("font-headline font-medium text-xl tracking-tight italic", scheme.titleColor)}>
+            <h3 className={cn("font-headline font-medium text-base sm:text-lg lg:text-xl tracking-tight italic", scheme.titleColor)}>
               {title}
             </h3>
             {subtitle && (
@@ -85,7 +85,7 @@ export function AlertBanner({ title, subtitle, icon: Icon, colorScheme = 'red', 
         </div>
         
         {children && (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {children}
           </div>
         )}

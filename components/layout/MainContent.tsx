@@ -5,7 +5,7 @@ import { useStore, type Task } from '@/store/useStore';
 import { Plus, CheckCircle2, Calendar as CalendarIcon, Tag, ChevronDown, Bell, Flag, LayoutDashboard, X, AlignLeft, Clock, AlertTriangle, Repeat } from 'lucide-react';
 import { createTask, updateTask } from '@/actions/task';
 import { cn } from '@/lib/utils';
-import { format, startOfDay, endOfDay, isSameDay, isBefore, addDays, addMonths } from 'date-fns';
+import { format, startOfDay, endOfDay, isSameDay, isBefore, addDays, addMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { MatrixView } from '@/components/views/MatrixView';
@@ -53,6 +53,20 @@ type VisibleTaskItem = {
   isCompleted: boolean;
 };
 
+type CompletedFilterType = 'week' | 'month' | 'all';
+type CompletedSortOrder = 'newest' | 'oldest';
+
+const completedFilterLabels: Record<CompletedFilterType, string> = {
+  week: 'This Week',
+  month: 'This Month',
+  all: 'All Time',
+};
+
+const completedSortLabels: Record<CompletedSortOrder, string> = {
+  newest: 'Newest First',
+  oldest: 'Oldest First',
+};
+
 export function MainContent() {
   const { toggleSidebar, currentView, selectedListId, tasks, addTask, updateTask: updateTaskState, deleteTask, setSelectedTaskId, searchQuery, user, setAuthModalOpen } = useStore();
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -65,6 +79,10 @@ export function MainContent() {
   // Upcoming filter state — default to 'all' (everything except today)
   const [upcomingFilter, setUpcomingFilter] = useState<'all' | 'this-week' | 'this-month'>('all');
   const [isUpcomingFilterOpen, setIsUpcomingFilterOpen] = useState(false);
+  const [completedFilter, setCompletedFilter] = useState<CompletedFilterType>('all');
+  const [completedSortOrder, setCompletedSortOrder] = useState<CompletedSortOrder>('newest');
+  const [isCompletedFilterOpen, setIsCompletedFilterOpen] = useState(false);
+  const [isCompletedSortOpen, setIsCompletedSortOpen] = useState(false);
 
   // Modal form state
   const [modalTaskTitle, setModalTaskTitle] = useState('');
@@ -127,6 +145,13 @@ export function MainContent() {
 
     setIsAddModalOpen(true);
   }, [currentView, resetModalForm, user, setAuthModalOpen]);
+
+  // Listen for FAB "openAddModal" event from DashboardLayout
+  useEffect(() => {
+    const handler = () => handleOpenAddModal();
+    window.addEventListener('openAddModal', handler);
+    return () => window.removeEventListener('openAddModal', handler);
+  }, [handleOpenAddModal]);
 
   const handleCloseAddModal = useCallback(() => {
     setIsAddModalOpen(false);
@@ -205,9 +230,13 @@ export function MainContent() {
       status: item.task.status,
       completedOccurrences: item.task.completedOccurrences,
       deletedOccurrences: item.task.deletedOccurrences,
+      updatedAt: item.task.updatedAt,
     };
     const newStatus = !item.isCompleted;
-    const updates = buildTaskCompletionUpdate(item.task, newStatus, item.occurrenceDate);
+    const updates = {
+      ...buildTaskCompletionUpdate(item.task, newStatus, item.occurrenceDate),
+      updatedAt: new Date(),
+    };
 
     updateTaskState(item.task.id, updates);
     try {
@@ -401,6 +430,43 @@ export function MainContent() {
     return task.isCompleted ? [createVisibleTaskItem(task)] : [];
   }), [createVisibleTaskItem, searchQuery, tasks]);
 
+  const getCompletedTaskReferenceDate = useCallback((item: VisibleTaskItem) => (
+    item.task.updatedAt ?? item.displayDate ?? item.task.createdAt ?? null
+  ), []);
+
+  const visibleCompletedTasks = useMemo(() => {
+    const weekStart = startOfWeek(now);
+    const weekEnd = endOfWeek(now);
+    const monthStart = startOfMonth(now);
+    const monthEnd = endOfMonth(now);
+
+    return completedTasks
+      .filter((item) => {
+        if (completedFilter === 'all') {
+          return true;
+        }
+
+        const referenceDate = getCompletedTaskReferenceDate(item);
+        if (!referenceDate) {
+          return false;
+        }
+
+        if (completedFilter === 'week') {
+          return referenceDate >= weekStart && referenceDate <= weekEnd;
+        }
+
+        return referenceDate >= monthStart && referenceDate <= monthEnd;
+      })
+      .sort((a, b) => {
+        const aTime = getCompletedTaskReferenceDate(a)?.getTime() ?? Number.NEGATIVE_INFINITY;
+        const bTime = getCompletedTaskReferenceDate(b)?.getTime() ?? Number.NEGATIVE_INFINITY;
+
+        return completedSortOrder === 'newest'
+          ? bTime - aTime
+          : aTime - bTime;
+      });
+  }, [completedFilter, completedSortOrder, completedTasks, getCompletedTaskReferenceDate, now]);
+
   const getViewTitle = () => {
     if (currentView === 'today') return 'Today';
     if (currentView === 'upcoming') return 'Upcoming';
@@ -447,7 +513,7 @@ export function MainContent() {
   return (
     <div className="flex flex-col h-full bg-surface">
       {/* Dynamic Content Area */}
-      <div className="flex-1 overflow-y-auto px-16 py-16">
+      <div className="mobile-bottom-spacer flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-10 lg:px-16 lg:py-16 lg:pb-16">
         <div className="max-w-5xl mx-auto">
           
           {/* Quick Add Bar */}
@@ -456,19 +522,19 @@ export function MainContent() {
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', damping: 30, stiffness: 400 }}
-              className="mb-20"
+              className="mb-4 sm:mb-14 lg:mb-20 hidden sm:block"
             >
               <div 
                 onClick={handleOpenAddModal}
-                className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-outline-variant/10 shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-300 ease-out cursor-pointer group"
+                className="flex items-center gap-3 sm:gap-4 bg-white p-2 rounded-2xl border border-outline-variant/10 shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-300 ease-out cursor-pointer group"
               >
-                <div className="ml-4 w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center group-hover:bg-primary/10 transition-colors duration-300">
+                <div className="ml-2 sm:ml-4 w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center group-hover:bg-primary/10 transition-colors duration-300">
                   <Plus className="w-5 h-5 text-primary/60 group-hover:text-primary group-hover:scale-110 transition-all duration-300" />
                 </div>
-                <span className="flex-1 py-4 font-body text-lg tracking-tight text-outline/40 group-hover:text-outline/60 transition-colors duration-300">
+                <span className="flex-1 py-3 sm:py-4 font-body text-sm sm:text-lg tracking-tight text-outline/40 group-hover:text-outline/60 transition-colors duration-300">
                   Capture a new objective...
                 </span>
-                <div className="flex gap-4 px-6 border-l border-outline-variant/20 group-hover:border-primary/10 transition-colors duration-300">
+                <div className="hidden sm:flex gap-4 px-6 border-l border-outline-variant/20 group-hover:border-primary/10 transition-colors duration-300">
                   <CalendarIcon className="w-5 h-5 text-outline/40 group-hover:text-primary/50 transition-colors duration-300" />
                   <Tag className="w-5 h-5 text-outline/40 group-hover:text-primary/50 transition-colors duration-300" />
                 </div>
@@ -483,7 +549,7 @@ export function MainContent() {
               <motion.div
                 key={`view-${currentView}-${selectedListId}`}
                 {...viewTransition}
-                className="space-y-16"
+                className="space-y-6 sm:space-y-10 lg:space-y-16"
               >
 
                 {/* Inbox Reminders / Urgency Box — Only on Inbox view */}
@@ -503,7 +569,7 @@ export function MainContent() {
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: index * 0.05 }}
                               onClick={() => selectTaskItem(item)}
-                              className="group flex items-center gap-4 p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-red-200/20 hover:border-red-300/50 hover:shadow-md hover:bg-white transition-all duration-200 cursor-pointer"
+                              className="group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-red-200/20 hover:border-red-300/50 hover:shadow-md hover:bg-white transition-all duration-200 cursor-pointer"
                             >
                               <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                                 {urgency === 'Overdue' || urgency === 'Reminder Overdue' ? (
@@ -527,8 +593,20 @@ export function MainContent() {
                                   )}
                                 </div>
                               </div>
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <span className="text-[9px] font-label font-bold tracking-[0.1em] uppercase text-red-500">View →</span>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <div className="hidden sm:flex opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                  <span className="text-[9px] font-label font-bold tracking-[0.1em] uppercase text-red-500">View →</span>
+                                </div>
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleToggleComplete(item);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-emerald-700 transition-all duration-200 hover:border-emerald-300 hover:bg-emerald-100 active:scale-95"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  Done
+                                </button>
                               </div>
                             </motion.div>
                           );
@@ -573,17 +651,17 @@ export function MainContent() {
                 )}
 
                 <div className="group-container">
-                  <div className="flex justify-between items-end mb-10 border-b border-outline-variant/30 pb-6">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-6 sm:mb-10 border-b border-outline-variant/30 pb-4 sm:pb-6 gap-3">
                     <div>
-                      <div className="flex items-center gap-4">
-                        <h2 className="font-headline font-medium text-5xl tracking-tight text-primary">{getViewTitle()}</h2>
+                      <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+                        <h2 className="font-headline font-medium text-3xl sm:text-4xl lg:text-5xl tracking-tight text-primary">{getViewTitle()}</h2>
                         
                         {/* Inbox filter dropdown */}
                         {isInboxView && (
                           <div className="relative">
                             <button
                               onClick={() => setIsFilterOpen(!isFilterOpen)}
-                              className="flex items-center gap-2 px-4 py-2 bg-primary/5 hover:bg-primary/10 rounded-full transition-all duration-200 border border-primary/10 hover:border-primary/20 active:scale-95"
+                              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary/5 hover:bg-primary/10 rounded-full transition-all duration-200 border border-primary/10 hover:border-primary/20 active:scale-95 touch-target"
                             >
                               <span className="text-[10px] font-label font-bold tracking-[0.15em] uppercase text-primary/70">{filterLabels[inboxFilter]}</span>
                               <ChevronDown className={cn("w-3.5 h-3.5 text-primary/50 transition-transform duration-300", isFilterOpen && "rotate-180")} />
@@ -600,7 +678,7 @@ export function MainContent() {
                                       key={filter}
                                       onClick={() => { setInboxFilter(filter); setIsFilterOpen(false); }}
                                       className={cn(
-                                        "w-full text-left px-5 py-3 text-[11px] font-label font-bold tracking-[0.1em] uppercase transition-all duration-150",
+                                        "w-full text-left px-5 py-3.5 text-[11px] font-label font-bold tracking-[0.1em] uppercase transition-all duration-150 touch-target",
                                         inboxFilter === filter
                                           ? "bg-primary/10 text-primary"
                                           : "text-on-surface-variant hover:bg-primary/5 hover:text-primary"
@@ -620,7 +698,7 @@ export function MainContent() {
                           <div className="relative">
                             <button
                               onClick={() => setIsUpcomingFilterOpen(!isUpcomingFilterOpen)}
-                              className="flex items-center gap-2 px-4 py-2 bg-primary/5 hover:bg-primary/10 rounded-full transition-all duration-200 border border-primary/10 hover:border-primary/20 active:scale-95"
+                              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary/5 hover:bg-primary/10 rounded-full transition-all duration-200 border border-primary/10 hover:border-primary/20 active:scale-95 touch-target"
                             >
                               <span className="text-[10px] font-label font-bold tracking-[0.15em] uppercase text-primary/70">{upcomingFilterLabels[upcomingFilter]}</span>
                               <ChevronDown className={cn("w-3.5 h-3.5 text-primary/50 transition-transform duration-300", isUpcomingFilterOpen && "rotate-180")} />
@@ -637,7 +715,7 @@ export function MainContent() {
                                       key={filter}
                                       onClick={() => { setUpcomingFilter(filter); setIsUpcomingFilterOpen(false); }}
                                       className={cn(
-                                        "w-full text-left px-5 py-3 text-[11px] font-label font-bold tracking-[0.1em] uppercase transition-all duration-150",
+                                        "w-full text-left px-5 py-3.5 text-[11px] font-label font-bold tracking-[0.1em] uppercase transition-all duration-150 touch-target",
                                         upcomingFilter === filter
                                           ? "bg-primary/10 text-primary"
                                           : "text-on-surface-variant hover:bg-primary/5 hover:text-primary"
@@ -652,9 +730,9 @@ export function MainContent() {
                           </div>
                         )}
                       </div>
-                      <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-3 font-bold opacity-60">Current Focus & Trajectory</p>
+                      <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-2 sm:mt-3 font-bold opacity-60">Current Focus & Trajectory</p>
                     </div>
-                    <span className="font-label text-[10px] tracking-[0.15em] text-outline font-semibold uppercase opacity-70">
+                    <span className="font-label text-[10px] tracking-[0.15em] text-outline font-semibold uppercase opacity-70 hidden sm:block">
                       {format(new Date(), 'EEEE, MMMM do')}
                     </span>
                   </div>
@@ -669,12 +747,12 @@ export function MainContent() {
                         key={`${item.task.id}-${item.occurrenceDate?.toISOString() ?? 'base'}`}
                         onClick={() => selectTaskItem(item)}
                         className={cn(
-                          "group flex items-center justify-between p-5 bg-white rounded-xl cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md active:scale-[0.99]",
+                          "group flex items-center justify-between p-4 sm:p-5 bg-white rounded-xl cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md active:scale-[0.99]",
                           "transition-[border-color,box-shadow,transform] duration-200",
                           item.isCompleted && "opacity-60 grayscale-[0.5]"
                         )}
                       >
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-4 sm:gap-6">
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -734,6 +812,98 @@ export function MainContent() {
             {/* Completed & Reminders View */}
             {currentView === 'completed-reminders' && (
               <motion.div key="view-completed" {...viewTransition} className="space-y-16">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setIsCompletedFilterOpen((open) => !open);
+                        setIsCompletedSortOpen(false);
+                      }}
+                      className="flex items-center justify-between gap-3 rounded-full border border-primary/10 bg-white px-4 py-2.5 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/5"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Filter</span>
+                        <span className="text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80">
+                          {completedFilterLabels[completedFilter]}
+                        </span>
+                      </span>
+                      <ChevronDown className={cn("h-3.5 w-3.5 text-primary/50 transition-transform duration-300", isCompletedFilterOpen && "rotate-180")} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCompletedFilterOpen && (
+                        <motion.div
+                          {...dropdownTransition}
+                          className="absolute left-0 top-full z-30 mt-2 w-44 overflow-hidden rounded-2xl border border-outline-variant/20 bg-white/95 shadow-lg backdrop-blur-xl"
+                        >
+                          {(['week', 'month', 'all'] as const).map((filter) => (
+                            <button
+                              key={filter}
+                              onClick={() => {
+                                setCompletedFilter(filter);
+                                setIsCompletedFilterOpen(false);
+                              }}
+                              className={cn(
+                                "w-full px-5 py-3.5 text-left text-[11px] font-label font-bold uppercase tracking-[0.1em] transition-all duration-150",
+                                completedFilter === filter
+                                  ? "bg-primary/10 text-primary"
+                                  : "text-on-surface-variant hover:bg-primary/5 hover:text-primary"
+                              )}
+                            >
+                              {completedFilterLabels[filter]}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setIsCompletedSortOpen((open) => !open);
+                        setIsCompletedFilterOpen(false);
+                      }}
+                      className="flex items-center justify-between gap-3 rounded-full border border-primary/10 bg-white px-4 py-2.5 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/5"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Order</span>
+                        <span className="text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80">
+                          {completedSortLabels[completedSortOrder]}
+                        </span>
+                      </span>
+                      <ChevronDown className={cn("h-3.5 w-3.5 text-primary/50 transition-transform duration-300", isCompletedSortOpen && "rotate-180")} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCompletedSortOpen && (
+                        <motion.div
+                          {...dropdownTransition}
+                          className="absolute left-0 top-full z-30 mt-2 w-44 overflow-hidden rounded-2xl border border-outline-variant/20 bg-white/95 shadow-lg backdrop-blur-xl"
+                        >
+                          {(['newest', 'oldest'] as const).map((order) => (
+                            <button
+                              key={order}
+                              onClick={() => {
+                                setCompletedSortOrder(order);
+                                setIsCompletedSortOpen(false);
+                              }}
+                              className={cn(
+                                "w-full px-5 py-3.5 text-left text-[11px] font-label font-bold uppercase tracking-[0.1em] transition-all duration-150",
+                                completedSortOrder === order
+                                  ? "bg-primary/10 text-primary"
+                                  : "text-on-surface-variant hover:bg-primary/5 hover:text-primary"
+                              )}
+                            >
+                              {completedSortLabels[order]}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
                 {/* Success Banner */}
                 <div className="mb-6">
                   <AlertBanner
@@ -782,19 +952,19 @@ export function MainContent() {
 
                 {/* Completed Tasks Section */}
                 <div className="group-container">
-                  <div className="flex justify-between items-end mb-10 border-b border-outline-variant/30 pb-6">
+                  <div className="mb-10 flex flex-col gap-3 border-b border-outline-variant/30 pb-6 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <h2 className="font-headline font-medium text-5xl tracking-tight text-primary">Completed</h2>
+                      <h2 className="font-headline font-medium text-3xl sm:text-4xl lg:text-5xl tracking-tight text-primary">Completed</h2>
                       <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-3 font-bold opacity-60">Accomplished Objectives</p>
                     </div>
                     <span className="font-label text-[10px] tracking-[0.15em] text-outline font-semibold uppercase opacity-70">
-                      {completedTasks.length} {completedTasks.length === 1 ? 'task' : 'tasks'}
+                      {visibleCompletedTasks.length} of {completedTasks.length} shown
                     </span>
                   </div>
                   
                   <div className="space-y-3">
                     <AnimatePresence mode="popLayout">
-                    {completedTasks.map((item, index) => (
+                    {visibleCompletedTasks.map((item, index) => (
                       <motion.div 
                         layout
                         {...listItemTransition}
@@ -815,11 +985,11 @@ export function MainContent() {
                           </button>
                           <div>
                             <p className="text-[15px] font-body text-outline line-through">{item.task.title}</p>
-                            {item.displayDate && (
+                            {(getCompletedTaskReferenceDate(item) ?? item.displayDate) && (
                               <div className="flex items-center gap-2 mt-1.5">
                                 <CalendarIcon className="w-3 h-3 text-outline/60" />
                                 <span className="text-[9px] font-label uppercase tracking-[0.15em] text-outline font-bold opacity-60">
-                                  {format(item.displayDate, 'MMM d, yyyy')}
+                                  {format(getCompletedTaskReferenceDate(item) ?? item.displayDate ?? new Date(), 'MMM d, yyyy')}
                                 </span>
                               </div>
                             )}
@@ -828,7 +998,7 @@ export function MainContent() {
                       </motion.div>
                     ))}
                     </AnimatePresence>
-                    {completedTasks.length === 0 && reminderTasks.length === 0 && (
+                    {visibleCompletedTasks.length === 0 && (
                       <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -838,8 +1008,14 @@ export function MainContent() {
                           <CheckCircle2 className="w-6 h-6 text-outline/40" />
                         </div>
                         <div>
-                          <p className="text-xl font-headline italic text-primary">Nothing here yet</p>
-                          <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">Completed tasks and alerts will appear here</p>
+                          <p className="text-xl font-headline italic text-primary">
+                            {completedTasks.length === 0 ? 'Nothing here yet' : 'No matches for this filter'}
+                          </p>
+                          <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">
+                            {completedTasks.length === 0
+                              ? 'Completed tasks and alerts will appear here'
+                              : 'Try another time range or sort order'}
+                          </p>
                         </div>
                       </motion.div>
                     )}
@@ -886,7 +1062,7 @@ export function MainContent() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/10 backdrop-blur-[8px]"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/10 backdrop-blur-[8px]"
             onClick={handleCloseAddModal}
           >
             <motion.div
@@ -895,13 +1071,15 @@ export function MainContent() {
               exit={{ scale: 0.93, opacity: 0, y: 20 }}
               transition={{ type: 'spring', damping: 28, stiffness: 350, mass: 0.7 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl overflow-hidden shadow-2xl w-full max-w-2xl border border-outline-variant/20 flex flex-col max-h-[85vh]"
+              className="bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl w-full sm:max-w-2xl border border-outline-variant/20 flex flex-col max-h-[90vh] sm:max-h-[85vh]"
             >
               {/* Modal Header */}
-              <div className="p-8 border-b border-outline-variant/10 bg-surface/50">
-                <div className="flex items-end justify-between mb-8">
+              <div className="p-5 sm:p-8 border-b border-outline-variant/10 bg-surface/50">
+                {/* Drag handle for mobile */}
+                <div className="w-10 h-1 rounded-full bg-outline-variant/40 mx-auto mb-4 sm:hidden" />
+                <div className="flex items-end justify-between mb-6 sm:mb-8">
                   <div>
-                    <h2 className="font-headline font-medium text-3xl tracking-tight text-primary italic">New Objective</h2>
+                    <h2 className="font-headline font-medium text-2xl sm:text-3xl tracking-tight text-primary italic">New Objective</h2>
                     <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-2 font-bold opacity-60">Capture your intent</p>
                   </div>
                   <button
@@ -930,7 +1108,7 @@ export function MainContent() {
               </div>
 
               {/* Optional Details */}
-              <div className="flex-1 min-h-0 p-8 overflow-y-auto space-y-8 bg-surface-container-lowest/30">
+              <div className="flex-1 min-h-0 p-5 sm:p-8 overflow-y-auto space-y-6 sm:space-y-8 bg-surface-container-lowest/30">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[9px] font-label font-bold tracking-[0.25em] uppercase text-outline/50">Optional Details</span>
                   <div className="flex-1 h-px bg-outline-variant/20" />
@@ -1158,7 +1336,7 @@ export function MainContent() {
               </div>
 
               {/* Footer */}
-              <div className="p-6 border-t border-outline-variant/10 flex items-center justify-end gap-4 bg-white">
+              <div className="p-4 sm:p-6 border-t border-outline-variant/10 flex items-center justify-end gap-3 sm:gap-4 bg-white safe-area-bottom">
                 <button
                   onClick={handleCloseAddModal}
                   className="px-6 py-3 text-[10px] font-label font-bold tracking-[0.15em] uppercase text-outline/60 hover:text-primary hover:bg-primary/5 rounded-xl transition-all duration-200 active:scale-95"

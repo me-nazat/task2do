@@ -9,10 +9,10 @@ import { Modal } from '@/components/ui/Modal';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 
 const quadrants = [
-  { id: 'urgent-important', title: 'Urgent & Important', color: 'bg-error/5 border-error/20 text-error' },
-  { id: 'not-urgent-important', title: 'Not Urgent & Important', color: 'bg-info/5 border-info/20 text-info' },
-  { id: 'urgent-not-important', title: 'Urgent & Not Important', color: 'bg-warning/5 border-warning/20 text-warning' },
-  { id: 'not-urgent-not-important', title: 'Not Urgent & Not Important', color: 'bg-surface-container-high/30 border-outline-variant/30 text-outline' },
+  { id: 'urgent-important', title: 'Urgent & Important', color: 'bg-red-50/80 border-red-200/40 text-red-700' },
+  { id: 'not-urgent-important', title: 'Not Urgent & Important', color: 'bg-blue-50/80 border-blue-200/40 text-blue-700' },
+  { id: 'urgent-not-important', title: 'Urgent & Not Important', color: 'bg-amber-50/80 border-amber-200/40 text-amber-700' },
+  { id: 'not-urgent-not-important', title: 'Not Urgent & Not Important', color: 'bg-stone-50/80 border-stone-200/40 text-stone-500' },
 ];
 
 export function MatrixView() {
@@ -103,17 +103,19 @@ export function MatrixView() {
 
   const handleToggleComplete = async (taskId: string, currentStatus: boolean | null) => {
     const newStatus = !currentStatus;
-    updateTaskState(taskId, { isCompleted: newStatus });
+    const task = tasks.find((item) => item.id === taskId);
+    const updates = { isCompleted: newStatus, updatedAt: new Date() };
+    updateTaskState(taskId, updates);
     try {
-      unwrapDatabaseResult(await updateTask(taskId, { isCompleted: newStatus }));
+      unwrapDatabaseResult(await updateTask(taskId, updates));
     } catch (error) {
-      updateTaskState(taskId, { isCompleted: currentStatus });
+      updateTaskState(taskId, { isCompleted: currentStatus, updatedAt: task?.updatedAt });
       alert(getClientErrorMessage(error, 'Unable to update the task right now.'));
     }
   };
 
   return (
-    <div className="grid grid-cols-2 grid-rows-2 gap-8 h-full min-h-[700px]">
+    <div className="grid h-auto grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 md:grid-rows-2 lg:gap-8 md:min-h-[700px]">
       {quadrants.map((quadrant) => {
         const quadrantTasks = tasks.filter(t => t.quadrant === quadrant.id && !t.parentId);
         
@@ -122,13 +124,12 @@ export function MatrixView() {
             key={quadrant.id}
             onDrop={(e) => handleDrop(e, quadrant.id)}
             onDragOver={handleDragOver}
-            className={cn("p-8 flex flex-col transition-all rounded-2xl border bg-white/40 backdrop-blur-sm", quadrant.color)}
-          >
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="font-headline font-medium text-2xl tracking-tight italic">{quadrant.title}</h3>
+            className={cn("flex min-h-[18rem] flex-col rounded-2xl border bg-white/40 p-4 backdrop-blur-sm transition-all sm:min-h-[20rem] sm:p-6 lg:min-h-0 lg:p-8", quadrant.color)}>
+            <div className="flex items-center justify-between mb-4 sm:mb-6 lg:mb-8">
+              <h3 className="font-headline font-medium text-lg sm:text-xl lg:text-2xl tracking-tight italic">{quadrant.title}</h3>
               <button 
                 onClick={() => openAddTaskModal(quadrant.id)}
-                className="p-2 hover:bg-black/5 rounded-full transition-colors"
+                className="touch-target flex items-center justify-center rounded-full p-2 transition-colors active:scale-95 active:bg-black/5 lg:hover:bg-black/5"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -154,17 +155,17 @@ export function MatrixView() {
                         <div 
                           key={task.id}
                           onClick={() => handleImportTask(task.id)}
-                          className="p-4 bg-surface-container border border-outline-variant/10 hover:border-primary/30 hover:shadow-sm rounded-xl cursor-pointer transition-all flex items-center justify-between group"
+                          className="group flex cursor-pointer items-center justify-between rounded-xl border border-outline-variant/10 bg-surface-container p-4 transition-all active:scale-[0.99] active:border-primary/30 active:shadow-sm lg:hover:border-primary/30 lg:hover:shadow-sm"
                         >
                           <span className="text-sm font-body font-medium text-primary truncate flex-1">{task.title}</span>
-                          <Plus className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <Plus className="w-4 h-4 text-primary opacity-0 transition-opacity lg:group-hover:opacity-100" />
                         </div>
                       ));
                     })()}
                   </div>
                   <button 
                     onClick={() => setIsImporting(false)}
-                    className="w-full bg-surface-container py-3 rounded-xl font-label font-bold tracking-[0.2em] uppercase hover:bg-surface-container-high transition-all text-outline mt-2"
+                    className="mt-2 w-full rounded-xl bg-surface-container py-3 font-label font-bold uppercase tracking-[0.2em] text-outline transition-all active:scale-[0.99] active:bg-surface-container-high lg:hover:bg-surface-container-high"
                   >
                     Back to Create New
                   </button>
@@ -179,20 +180,20 @@ export function MatrixView() {
                       value={newTaskTitle}
                       onChange={(e) => setNewTaskTitle(e.target.value)}
                       placeholder="e.g. Finish quarterly report"
-                      className="w-full bg-surface-container-low border border-outline-variant/20 rounded-xl px-5 py-4 font-body text-lg focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                      className="w-full rounded-xl border border-outline-variant/20 bg-surface-container-low px-5 py-4 font-body text-base outline-none transition-all focus:ring-2 focus:ring-primary/20 sm:text-lg"
                     />
                   </div>
                   <div className="flex gap-3">
                     <button 
                       type="button"
                       onClick={() => setIsImporting(true)}
-                      className="flex-1 bg-surface-container py-4 rounded-xl font-label font-bold tracking-[0.1em] uppercase hover:bg-surface-container-high transition-all text-outline"
+                      className="flex-1 rounded-xl bg-surface-container py-4 font-label font-bold uppercase tracking-[0.1em] text-outline transition-all active:scale-[0.99] active:bg-surface-container-high lg:hover:bg-surface-container-high"
                     >
                       Import Existing
                     </button>
                     <button 
                       type="submit"
-                      className="flex-[2] bg-primary text-on-primary py-4 rounded-xl font-label font-bold tracking-[0.15em] uppercase hover:bg-primary/90 transition-all shadow-md"
+                      className="flex-[2] rounded-xl bg-primary py-4 font-label font-bold uppercase tracking-[0.15em] text-on-primary shadow-md transition-all active:scale-[0.99] lg:hover:bg-primary/90"
                     >
                       Create Task
                     </button>
@@ -200,7 +201,7 @@ export function MatrixView() {
                 </form>
               )}
             </Modal>
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2 hide-scrollbar">
+            <div className="hide-scrollbar max-h-[15rem] flex-1 space-y-4 overflow-y-auto pr-1 sm:max-h-[18rem] sm:pr-2 md:max-h-none">
               {quadrantTasks.map(task => (
                 <div 
                   key={task.id}
@@ -208,7 +209,7 @@ export function MatrixView() {
                   onDragStart={(e) => handleDragStart(e, task.id)}
                   onClick={() => setSelectedTaskId(task.id)}
                   className={cn(
-                    "flex items-center gap-4 p-5 bg-white rounded-xl shadow-sm border border-outline-variant/10 cursor-grab active:cursor-grabbing hover:shadow-md transition-all",
+                    "flex cursor-grab items-center gap-3 rounded-xl border border-outline-variant/10 bg-white p-4 shadow-sm transition-all active:cursor-grabbing active:scale-[0.99] sm:gap-4 sm:p-5 lg:hover:shadow-md",
                     task.isCompleted && "opacity-60 grayscale-[0.5]"
                   )}
                 >
@@ -218,8 +219,8 @@ export function MatrixView() {
                       handleToggleComplete(task.id, task.isCompleted);
                     }}
                     className={cn(
-                      "w-5 h-5 rounded-full border flex items-center justify-center transition-all shrink-0",
-                      task.isCompleted ? "bg-primary border-primary text-on-primary" : "border-outline-variant hover:border-primary"
+                      "touch-target flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all",
+                      task.isCompleted ? "border-primary bg-primary text-on-primary" : "border-outline-variant active:border-primary lg:hover:border-primary"
                     )}
                   >
                     {task.isCompleted && <CheckCircle2 className="w-3 h-3" />}
@@ -230,7 +231,7 @@ export function MatrixView() {
                 </div>
               ))}
               {quadrantTasks.length === 0 && (
-                <div className="text-[9px] font-label font-bold tracking-[0.25em] uppercase text-outline/40 text-center py-16 border border-dashed border-outline-variant/30 rounded-xl">
+                <div className="text-[9px] font-label font-bold tracking-[0.25em] uppercase text-outline/40 text-center py-8 sm:py-12 lg:py-16 border border-dashed border-outline-variant/30 rounded-xl">
                   Awaiting Input
                 </div>
               )}

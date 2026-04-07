@@ -496,15 +496,15 @@ export function AIChatView() {
 
   if (!hasHydratedChat) {
     return (
-      <div className="mx-auto flex h-[calc(100vh-128px)] max-w-4xl flex-col">
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 shadow-lg shadow-purple-500/20">
-              <Sparkles className="h-6 w-6 text-white" />
+      <div className="mx-auto flex h-[calc(100vh-200px)] sm:h-[calc(100vh-128px)] max-w-4xl flex-col">
+        <div className="mb-4 sm:mb-8 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 shadow-lg shadow-purple-500/20">
+              <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div>
-              <h2 className="font-headline text-3xl font-medium tracking-tight text-primary italic">AI Assistant</h2>
-              <p className="text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline/60">
+              <h2 className="font-headline text-2xl sm:text-3xl font-medium tracking-tight text-primary italic">AI Assistant</h2>
+              <p className="text-[8px] sm:text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline/60 max-w-[200px] sm:max-w-none truncate">
                 Restoring your saved sessions
               </p>
             </div>
@@ -525,21 +525,21 @@ export function AIChatView() {
 
   return (
     <>
-      <div className="mx-auto flex h-[calc(100vh-128px)] max-w-4xl flex-col">
-        <div className="mb-8 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 shadow-lg shadow-purple-500/20">
-              <Sparkles className="h-6 w-6 text-white" />
+      <div className="mx-auto flex h-[calc(100vh-200px)] sm:h-[calc(100vh-128px)] max-w-4xl flex-col">
+        <div className="mb-4 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 shadow-lg shadow-purple-500/20">
+              <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div>
-              <h2 className="font-headline text-3xl font-medium tracking-tight text-primary italic">AI Assistant</h2>
-              <p className="text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline/60">
-                {activeProviderLabel} active • persistent memory and actionable planning
+              <h2 className="font-headline text-2xl sm:text-3xl font-medium tracking-tight text-primary italic">AI Assistant</h2>
+              <p className="text-[8px] sm:text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline/60 max-w-[200px] sm:max-w-none truncate">
+                {activeProviderLabel} active
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:justify-end">
             <div className="rounded-full border border-outline-variant/10 bg-white p-1 shadow-sm">
               <div className="flex items-center gap-1">
                 {(['gemini', 'mimo'] as AIProvider[]).map((provider) => {
@@ -552,7 +552,7 @@ export function AIChatView() {
                       disabled={isLoading}
                       onClick={() => setSelectedAIProvider(provider)}
                       className={cn(
-                        'rounded-full px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.16em] transition-all',
+                        'rounded-full px-3 sm:px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.16em] transition-all touch-target',
                         isActive
                           ? 'bg-primary text-on-primary shadow-sm'
                           : 'text-outline/55 hover:bg-primary/5 hover:text-primary',
@@ -569,7 +569,7 @@ export function AIChatView() {
             <div ref={historyRef} className="relative flex items-center gap-3">
               <button
                 onClick={() => setIsHistoryOpen((current) => !current)}
-                className="flex items-center gap-2 rounded-full border border-outline-variant/10 px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:border-primary/15 hover:bg-primary/5 hover:text-primary"
+                className="flex items-center gap-2 rounded-full border border-outline-variant/10 px-3 sm:px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:border-primary/15 hover:bg-primary/5 hover:text-primary touch-target"
               >
                 <History className="h-3.5 w-3.5" />
                 History
@@ -577,7 +577,7 @@ export function AIChatView() {
 
               <button
                 onClick={handleReset}
-                className="flex items-center gap-2 rounded-full px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:bg-primary/5 hover:text-primary"
+                className="flex items-center gap-2 rounded-full px-3 sm:px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all hover:bg-primary/5 hover:text-primary touch-target"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 New Chat
@@ -600,15 +600,15 @@ export function AIChatView() {
 
         <div className="hide-scrollbar flex-1 overflow-y-auto rounded-2xl border border-outline-variant/10 bg-white shadow-sm">
           {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center p-12 text-center">
+            <div className="flex h-full flex-col items-center justify-center p-6 sm:p-12 text-center">
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-                className="relative mb-8"
+                className="relative mb-4 sm:mb-8"
               >
-                <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 shadow-2xl shadow-purple-500/30">
-                  <Sparkles className="h-12 w-12 text-white" />
+                <div className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 shadow-2xl shadow-purple-500/30">
+                  <Sparkles className="h-8 w-8 sm:h-12 sm:w-12 text-white" />
                 </div>
                 <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-violet-400 to-indigo-500 opacity-20 blur-xl animate-pulse" />
               </motion.div>
@@ -618,11 +618,11 @@ export function AIChatView() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
               >
-                <h3 className="mb-2 font-headline text-2xl font-medium italic tracking-tight text-primary">
+                <h3 className="mb-2 font-headline text-xl sm:text-2xl font-medium italic tracking-tight text-primary">
                   What do you want to move forward today?
                 </h3>
-                <p className="max-w-xl text-[13px] leading-relaxed text-outline/60">
-                  {activeProviderLabel} is ready with the same Task2Do-native context, task drafting flow, and approval-based actions. {activeProviderDescription}
+                <p className="max-w-xl text-[12px] sm:text-[13px] leading-relaxed text-outline/60">
+                  {activeProviderLabel} is ready with Task2Do-native context and task drafting. {activeProviderDescription}
                 </p>
               </motion.div>
 
@@ -630,7 +630,7 @@ export function AIChatView() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="mt-8 flex max-w-2xl flex-wrap justify-center gap-3"
+                className="mt-6 sm:mt-8 flex max-w-2xl flex-wrap justify-center gap-2 sm:gap-3"
               >
                 {suggestions.map((suggestion) => (
                   <button
@@ -639,7 +639,7 @@ export function AIChatView() {
                       setInputValue(suggestion);
                       inputRef.current?.focus();
                     }}
-                    className="rounded-full border border-primary/10 bg-primary/5 px-5 py-2.5 text-[12px] font-medium text-primary/70 transition-all hover:border-primary/20 hover:bg-primary/10 hover:shadow-sm"
+                    className="rounded-full border border-primary/10 bg-primary/5 px-4 sm:px-5 py-2 sm:py-2.5 text-[11px] sm:text-[12px] font-medium text-primary/70 transition-all hover:border-primary/20 hover:bg-primary/10 hover:shadow-sm touch-target"
                   >
                     {suggestion}
                   </button>
@@ -647,7 +647,7 @@ export function AIChatView() {
               </motion.div>
             </div>
           ) : (
-            <div className="space-y-6 p-6">
+            <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
               <AnimatePresence>
                 {messages.map((message) => (
                   <motion.div
@@ -667,7 +667,7 @@ export function AIChatView() {
                     )}
 
                     <div className={cn(
-                      "max-w-[78%] rounded-2xl px-6 py-4",
+                      "max-w-[90%] sm:max-w-[78%] rounded-2xl px-4 sm:px-6 py-3 sm:py-4",
                       message.role === 'user'
                         ? "rounded-br-md bg-primary text-on-primary"
                         : "rounded-bl-md border border-outline-variant/10 bg-surface-container-low"
@@ -728,9 +728,9 @@ export function AIChatView() {
           )}
         </div>
 
-        <div className="mt-6">
-          <div className="flex items-end gap-3 rounded-2xl border border-outline-variant/10 bg-white p-3 shadow-sm transition-all duration-300 focus-within:border-primary/20 focus-within:shadow-md">
-            <div className="ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-600/10">
+        <div className="mt-3 sm:mt-6">
+          <div className="flex items-end gap-2 sm:gap-3 rounded-2xl border border-outline-variant/10 bg-white p-2 sm:p-3 shadow-sm transition-all duration-300 focus-within:border-primary/20 focus-within:shadow-md">
+            <div className="ml-1 sm:ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-600/10 hidden sm:flex">
               <Sparkles className="h-4 w-4 text-purple-500" />
             </div>
             <textarea
@@ -740,7 +740,7 @@ export function AIChatView() {
               onKeyDown={handleKeyDown}
               placeholder={`Ask ${activeProviderLabel} to plan, prioritize, or schedule something...`}
               rows={1}
-              className="max-h-32 min-h-[40px] flex-1 resize-none border-none bg-transparent py-2 text-[15px] tracking-tight text-primary outline-none placeholder:text-outline/40"
+              className="max-h-32 min-h-[40px] flex-1 resize-none border-none bg-transparent py-2 text-[14px] sm:text-[15px] tracking-tight text-primary outline-none placeholder:text-outline/40"
             />
             <button
               onClick={handleSend}
@@ -755,7 +755,7 @@ export function AIChatView() {
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
           </div>
-          <p className="mt-3 text-center text-[9px] font-label font-bold uppercase tracking-[0.2em] text-outline/30">
+          <p className="mt-2 sm:mt-3 text-center text-[8px] sm:text-[9px] font-label font-bold uppercase tracking-[0.2em] text-outline/30">
             {activeProviderLabel} • Shared Task2Do memory, polished replies, and approval-based actions
           </p>
         </div>

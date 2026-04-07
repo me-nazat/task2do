@@ -17,17 +17,23 @@ export function Modal({ isOpen, onClose, title, children, contentClassName }: Mo
   return (
     <Dialog.Root open={isOpen} onOpenChange={onClose}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-300" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/35 backdrop-blur-md animate-in fade-in duration-300" />
         <Dialog.Content className={cn(
-          "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-3xl shadow-2xl z-50 p-8 animate-in zoom-in-95 slide-in-from-bottom-10 duration-300",
+          "fixed z-50 overflow-y-auto bg-white shadow-2xl animate-in duration-300",
+          "inset-x-0 bottom-0 max-h-[88svh] min-h-[52svh] rounded-t-[2rem] px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-5",
+          "sm:inset-auto sm:left-1/2 sm:top-1/2 sm:min-h-0 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:px-8 sm:pb-8 sm:pt-8 sm:max-h-[85vh]",
+          /* Animations */
+          "max-sm:mobile-bottom-sheet sm:zoom-in-95 sm:slide-in-from-bottom-10",
           contentClassName
         )}>
-          <div className="flex items-center justify-between mb-8">
-            <Dialog.Title className="text-2xl font-headline font-medium italic text-primary">
+          <div className="mb-6 flex items-center justify-between sm:mb-8">
+            {/* Drag handle for mobile */}
+            <div className="absolute left-1/2 top-3 h-1 w-10 -translate-x-1/2 rounded-full bg-outline-variant/40 sm:hidden" />
+            <Dialog.Title className="mt-2 pr-10 text-lg font-headline font-medium italic text-primary sm:mt-0 sm:text-2xl">
               {title}
             </Dialog.Title>
             <Dialog.Close asChild>
-              <button className="p-2 hover:bg-primary/5 rounded-full transition-colors text-outline/60">
+              <button className="touch-target flex items-center justify-center rounded-full p-2 text-outline/60 transition-colors active:scale-95 active:bg-primary/5 lg:hover:bg-primary/5">
                 <X className="w-5 h-5" />
               </button>
             </Dialog.Close>

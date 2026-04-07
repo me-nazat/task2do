@@ -106,8 +106,8 @@ export function HabitTrackerView() {
   return (
     <div className="flex flex-col h-full gap-8">
       {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-surface-container-lowest border-l-4 border-primary p-6 shadow-sm flex items-center gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="bg-surface-container-lowest border-l-4 border-primary p-4 sm:p-6 shadow-sm flex items-center gap-4 sm:gap-6">
           <div className="w-12 h-12 bg-primary text-on-primary-fixed flex items-center justify-center">
             <Flame className="w-6 h-6" />
           </div>
@@ -118,7 +118,7 @@ export function HabitTrackerView() {
             </p>
           </div>
         </div>
-        <div className="bg-surface-container-lowest border-l-4 border-warning p-6 shadow-sm flex items-center gap-6">
+        <div className="bg-surface-container-lowest border-l-4 border-warning p-4 sm:p-6 shadow-sm flex items-center gap-4 sm:gap-6">
           <div className="w-12 h-12 bg-warning text-warning-on-container flex items-center justify-center">
             <Check className="w-6 h-6" />
           </div>
@@ -129,7 +129,7 @@ export function HabitTrackerView() {
             </p>
           </div>
         </div>
-        <div className="bg-surface-container-lowest border-l-4 border-info p-6 shadow-sm flex items-center gap-6">
+        <div className="bg-surface-container-lowest border-l-4 border-info p-4 sm:p-6 shadow-sm flex items-center gap-4 sm:gap-6">
           <div className="w-12 h-12 bg-info text-info-on-container flex items-center justify-center">
             <CalendarIcon className="w-6 h-6" />
           </div>
@@ -142,14 +142,15 @@ export function HabitTrackerView() {
 
       {/* Habits List */}
       <div className="flex-1 bg-surface-container-lowest border-2 border-transparent shadow-sm overflow-hidden flex flex-col">
-        <div className="px-8 py-6 border-b-2 border-outline-variant bg-surface-container-low flex items-center justify-between">
-          <h2 className="text-2xl font-black font-headline tracking-tighter uppercase text-on-surface">WEEKLY PROGRESS</h2>
+        <div className="px-4 sm:px-8 py-4 sm:py-6 border-b-2 border-outline-variant bg-surface-container-low flex items-center justify-between gap-3">
+          <h2 className="text-lg sm:text-2xl font-black font-headline tracking-tighter uppercase text-on-surface">WEEKLY PROGRESS</h2>
           <button 
             onClick={() => setIsAddHabitModalOpen(true)}
-            className="flex items-center gap-3 px-6 py-3 bg-primary text-on-primary-fixed text-[10px] font-label font-bold tracking-[0.2em] uppercase hover:bg-primary/90 transition-colors shadow-sm"
+            className="flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2.5 sm:py-3 bg-primary text-on-primary-fixed text-[10px] font-label font-bold tracking-[0.2em] uppercase hover:bg-primary/90 transition-colors shadow-sm touch-target"
           >
             <Plus className="w-4 h-4" />
-            NEW HABIT
+            <span className="hidden sm:inline">NEW HABIT</span>
+            <span className="sm:hidden">NEW</span>
           </button>
         </div>
 
@@ -179,7 +180,7 @@ export function HabitTrackerView() {
           </form>
         </Modal>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-x-auto overflow-y-auto p-3 sm:p-6">
           {error && (
             <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-body text-red-800">
               {error}
@@ -188,9 +189,9 @@ export function HabitTrackerView() {
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b-2 border-outline-variant">
-                <th className="px-6 py-4 text-left text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline w-1/3">HABIT</th>
+                <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline w-1/3 min-w-[120px]">HABIT</th>
                 {weekDays.map(day => (
-                  <th key={day.toString()} className="px-2 py-4 text-center">
+                  <th key={day.toString()} className="px-1 sm:px-2 py-3 sm:py-4 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <span className="text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline">{format(day, 'EEE')}</span>
                       <span className={cn(
@@ -207,8 +208,8 @@ export function HabitTrackerView() {
             <tbody>
               {habits.map((habit) => (
                 <tr key={habit.id} className="border-b border-outline-variant hover:bg-surface-container-low transition-colors group">
-                  <td className="px-6 py-6">
-                    <div className="flex items-center justify-between">
+                  <td className="px-3 sm:px-6 py-4 sm:py-6">
+                    <div className="flex items-center justify-between min-w-[100px]">
                       <div>
                         <p className="font-headline font-bold text-sm tracking-widest uppercase text-on-surface">{habit.name}</p>
                         <p className="text-[9px] font-label font-bold tracking-[0.25em] uppercase text-outline mt-1">{habit.frequency}</p>
@@ -224,12 +225,12 @@ export function HabitTrackerView() {
                     const isFuturistic = day > today;
 
                     return (
-                      <td key={day.toString()} className="px-2 py-6 text-center">
+                      <td key={day.toString()} className="px-1 sm:px-2 py-4 sm:py-6 text-center">
                         <button
                           disabled={isFuturistic}
                           onClick={() => handleToggleHabit(habit.id, dateStr)}
                           className={cn(
-                            "w-10 h-10 flex items-center justify-center transition-all border-2",
+                            "w-11 h-11 flex items-center justify-center transition-all border-2 touch-target",
                             isCompleted 
                               ? "bg-primary border-primary text-on-primary-fixed shadow-sm" 
                               : "bg-transparent border-outline hover:border-primary text-transparent",

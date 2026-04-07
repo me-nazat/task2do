@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, Task } from '@/store/useStore';
 import { 
   format, 
@@ -12,11 +12,13 @@ import {
   isSameMonth, 
   addMonths, 
   subMonths,
+  addDays,
+  differenceInCalendarDays,
   isToday,
   startOfDay,
   endOfDay
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Calendar as CalendarIcon, Tag, ChevronDown, Flag, LayoutDashboard, AlignLeft, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Calendar as CalendarIcon, Tag, ChevronDown, Flag, LayoutDashboard, AlignLeft, Repeat, Search, Download, CalendarRange, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
@@ -30,12 +32,54 @@ type CalendarDayItem = {
   isCompleted: boolean;
 };
 
+type CalendarRangeMode = 'month' | 'custom';
+
+const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const toDateInputValue = (value: Date) => format(value, 'yyyy-MM-dd');
+
+const parseDateInput = (value: string, endOfSelectedDay = false) => {
+  if (!value) {
+    return null;
+  }
+
+  const nextDate = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(nextDate.getTime())) {
+    return null;
+  }
+
+  return endOfSelectedDay ? endOfDay(nextDate) : startOfDay(nextDate);
+};
+
+const formatScheduleTitle = (start: Date, end: Date) => {
+  if (format(start, 'yyyy-MM-dd') === format(end, 'yyyy-MM-dd')) {
+    return format(start, 'MMMM d, yyyy');
+  }
+
+  if (format(start, 'yyyy-MM') === format(end, 'yyyy-MM')) {
+    return `${format(start, 'MMMM d')} - ${format(end, 'd, yyyy')}`;
+  }
+
+  return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
+};
+
 export function CalendarView() {
   const { tasks, setSelectedTaskId, user, addTask, updateTask: updateTaskState, deleteTask } = useStore();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [calendarRangeMode, setCalendarRangeMode] = useState<CalendarRangeMode>('month');
+  const [customRangeStart, setCustomRangeStart] = useState(() => startOfDay(new Date()));
+  const [customRangeEnd, setCustomRangeEnd] = useState(() => endOfDay(addDays(new Date(), 13)));
+  const [isCustomScheduleOpen, setIsCustomScheduleOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [scheduleSearchQuery, setScheduleSearchQuery] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const calendarCaptureRef = useRef<HTMLDivElement>(null);
+  const customSchedulePanelRef = useRef<HTMLDivElement>(null);
+  const customScheduleButtonRef = useRef<HTMLButtonElement>(null);
 
   // Expandable details state
   const [showDetails, setShowDetails] = useState(false);
@@ -47,6 +91,35 @@ export function CalendarView() {
   const [showCustomTimes, setShowCustomTimes] = useState(false);
   const [calendarStatus, setCalendarStatus] = useState<'todo' | 'in-progress' | 'done'>('todo');
   const [calendarDescription, setCalendarDescription] = useState('');
+
+  useEffect(() => {
+    if (!isSearchOpen) {
+      return;
+    }
+
+    searchInputRef.current?.focus();
+  }, [isSearchOpen]);
+
+  useEffect(() => {
+    if (!isCustomScheduleOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (
+        customSchedulePanelRef.current?.contains(target) ||
+        customScheduleButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setIsCustomScheduleOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isCustomScheduleOpen]);
 
   const resetDetails = () => {
     setShowDetails(false);
@@ -118,6 +191,8 @@ export function CalendarView() {
     }
   };
 
+  const normalizedScheduleSearch = scheduleSearchQuery.trim().toLowerCase();
+
   const getDayTaskItems = useCallback((day: Date) => (
     tasks
       .flatMap((task) => (
@@ -139,14 +214,45 @@ export function CalendarView() {
       })
   ), [tasks]);
 
+  const doesTaskMatchScheduleSearch = useCallback((item: CalendarDayItem) => {
+    if (!normalizedScheduleSearch) {
+      return true;
+    }
+
+    const searchableContent = [
+      item.task.title,
+      item.task.description ?? '',
+      format(item.occurrenceDate, 'MMMM d EEEE'),
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return searchableContent.includes(normalizedScheduleSearch);
+  }, [normalizedScheduleSearch]);
+
+  const doesDayMatchScheduleSearch = useCallback((day: Date, dayItems: CalendarDayItem[]) => {
+    if (!normalizedScheduleSearch) {
+      return true;
+    }
+
+    return (
+      format(day, 'MMMM d EEEE').toLowerCase().includes(normalizedScheduleSearch) ||
+      dayItems.some(doesTaskMatchScheduleSearch)
+    );
+  }, [doesTaskMatchScheduleSearch, normalizedScheduleSearch]);
+
   const handleToggleComplete = async (item: CalendarDayItem) => {
     const previousState = {
       isCompleted: item.task.isCompleted,
       status: item.task.status,
       completedOccurrences: item.task.completedOccurrences,
       deletedOccurrences: item.task.deletedOccurrences,
+      updatedAt: item.task.updatedAt,
     };
-    const updates = buildTaskCompletionUpdate(item.task, !item.isCompleted, item.occurrenceDate);
+    const updates = {
+      ...buildTaskCompletionUpdate(item.task, !item.isCompleted, item.occurrenceDate),
+      updatedAt: new Date(),
+    };
 
     updateTaskState(item.task.id, updates);
     try {
@@ -158,120 +264,488 @@ export function CalendarView() {
     }
   };
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart);
-  const endDate = endOfWeek(monthEnd);
+  const normalizedCustomRange = useMemo(() => {
+    const safeStart = startOfDay(customRangeStart);
+    const safeEnd = endOfDay(customRangeEnd);
 
-  const calendarDays = eachDayOfInterval({
-    start: startDate,
-    end: endDate,
-  });
+    if (safeStart.getTime() <= safeEnd.getTime()) {
+      return { start: safeStart, end: safeEnd };
+    }
 
-  const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
-  const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+    return {
+      start: startOfDay(customRangeEnd),
+      end: endOfDay(customRangeStart),
+    };
+  }, [customRangeEnd, customRangeStart]);
 
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const selectedDayTasks = useMemo(
-    () => (selectedDate ? getDayTaskItems(selectedDate) : []),
-    [getDayTaskItems, selectedDate]
+  const activeRangeStart = calendarRangeMode === 'month'
+    ? startOfMonth(currentMonth)
+    : normalizedCustomRange.start;
+  const activeRangeEnd = calendarRangeMode === 'month'
+    ? endOfMonth(activeRangeStart)
+    : normalizedCustomRange.end;
+  const rangeStart = startOfWeek(activeRangeStart);
+  const rangeEnd = endOfWeek(activeRangeEnd);
+
+  const calendarDays = useMemo(() => eachDayOfInterval({
+    start: rangeStart,
+    end: rangeEnd,
+  }), [rangeEnd, rangeStart]);
+
+  const customRangeLength = Math.max(
+    differenceInCalendarDays(normalizedCustomRange.end, normalizedCustomRange.start) + 1,
+    1
   );
+
+  const scheduleTitle = calendarRangeMode === 'month'
+    ? format(currentMonth, 'MMMM yyyy')
+    : formatScheduleTitle(normalizedCustomRange.start, normalizedCustomRange.end);
+
+  const shiftVisibleRange = (direction: 'previous' | 'next') => {
+    const step = direction === 'next' ? 1 : -1;
+
+    if (calendarRangeMode === 'month') {
+      setCurrentMonth((current) => (
+        direction === 'next' ? addMonths(current, 1) : subMonths(current, 1)
+      ));
+      return;
+    }
+
+    setCustomRangeStart((current) => startOfDay(addDays(current, customRangeLength * step)));
+    setCustomRangeEnd((current) => endOfDay(addDays(current, customRangeLength * step)));
+  };
+
+  const resetVisibleRange = () => {
+    if (calendarRangeMode === 'month') {
+      setCurrentMonth(new Date());
+      return;
+    }
+
+    const today = new Date();
+    setCustomRangeStart(startOfDay(today));
+    setCustomRangeEnd(endOfDay(addDays(today, customRangeLength - 1)));
+  };
+
+  const handleDownloadPdf = useCallback(async () => {
+    if (!calendarCaptureRef.current) {
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
+      const canvas = await html2canvas(calendarCaptureRef.current, {
+        backgroundColor: '#ffffff',
+        scale: Math.max(window.devicePixelRatio, 2),
+        useCORS: true,
+        logging: false,
+      });
+
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [canvas.width, canvas.height],
+        compress: true,
+      });
+
+      pdf.addImage(
+        canvas.toDataURL('image/png', 1),
+        'PNG',
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+        undefined,
+        'FAST'
+      );
+
+      const filename = calendarRangeMode === 'month'
+        ? `task2do-schedule-${format(currentMonth, 'yyyy-MM')}.pdf`
+        : `task2do-schedule-${format(normalizedCustomRange.start, 'yyyy-MM-dd')}-to-${format(normalizedCustomRange.end, 'yyyy-MM-dd')}.pdf`;
+
+      pdf.save(filename);
+    } catch (error) {
+      console.error('Failed to export schedule as PDF', error);
+      alert('Unable to download the schedule PDF right now.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [calendarRangeMode, currentMonth, normalizedCustomRange.end, normalizedCustomRange.start]);
+
+  const selectedDayTasks = useMemo(() => {
+    if (!selectedDate) {
+      return [];
+    }
+
+    const items = getDayTaskItems(selectedDate);
+    if (!normalizedScheduleSearch) {
+      return items;
+    }
+
+    const matchedItems = items.filter(doesTaskMatchScheduleSearch);
+    if (matchedItems.length > 0) {
+      return matchedItems;
+    }
+
+    return format(selectedDate, 'MMMM d EEEE').toLowerCase().includes(normalizedScheduleSearch)
+      ? items
+      : [];
+  }, [doesTaskMatchScheduleSearch, getDayTaskItems, normalizedScheduleSearch, selectedDate]);
 
   return (
     <div className="flex flex-col h-full bg-white rounded-3xl border border-outline-variant/10 shadow-sm overflow-hidden">
       {/* Calendar Header */}
-      <div className="flex items-center justify-between px-10 py-8 border-b border-outline-variant/10 bg-white/50 backdrop-blur-md">
-        <div className="flex items-center gap-8">
-          <h2 className="text-4xl font-headline font-medium tracking-tight text-primary italic">
-            {format(currentMonth, 'MMMM yyyy')}
-          </h2>
-          <div className="flex items-center gap-1 bg-primary/5 rounded-full p-1 border border-primary/10">
-            <button 
-              onClick={prevMonth}
-              className="p-2 hover:bg-primary/10 rounded-full transition-colors text-primary/60 hover:text-primary"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setCurrentMonth(new Date())}
-              className="px-5 py-2 text-[9px] font-label font-bold tracking-[0.2em] uppercase hover:bg-primary/10 rounded-full transition-colors text-primary/80"
-            >
-              Today
-            </button>
-            <button 
-              onClick={nextMonth}
-              className="p-2 hover:bg-primary/10 rounded-full transition-colors text-primary/60 hover:text-primary"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Weekdays Header */}
-      <div className="grid grid-cols-7 border-b border-outline-variant/10 bg-white">
-        {weekDays.map(day => (
-          <div key={day} className="py-5 text-center text-[9px] font-label font-bold uppercase tracking-[0.3em] text-outline/40">
-            {day}
-          </div>
-        ))}
-      </div>
-
-      {/* Calendar Grid */}
-      <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto bg-white hide-scrollbar">
-        {calendarDays.map((day, idx) => {
-          const dayTasks = getDayTaskItems(day);
-          const visibleDayTasks = dayTasks.slice(0, 5);
-          const isCurrentMonth = isSameMonth(day, monthStart);
-          const isCurrentDay = isToday(day);
-
-          return (
-            <div 
-              key={day.toString()}
-              onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
-              className={cn(
-                "min-h-[13.5rem] border-r border-b border-outline-variant/10 p-3.5 grid grid-rows-[auto_minmax(0,1fr)] gap-2.5 transition-all hover:bg-primary/[0.02] cursor-pointer",
-                !isCurrentMonth && "bg-primary/[0.01] opacity-30",
-                idx % 7 === 6 && "border-r-0"
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-body font-bold transition-all",
-                  isCurrentDay ? "bg-primary text-on-primary shadow-md" : "text-primary/60"
-                )}>
-                  {format(day, 'd')}
-                </span>
-                {dayTasks.length > 0 && (
-                  <span className="text-[8px] font-label font-bold tracking-[0.15em] uppercase text-outline/40">
-                    {dayTasks.length} {dayTasks.length === 1 ? 'Objective' : 'Objectives'}
-                  </span>
-                )}
-              </div>
-
-              <div className="grid min-h-0 grid-rows-5 gap-1.5 overflow-hidden">
-                {visibleDayTasks.map((item) => (
-                  <motion.div
-                    layoutId={`${item.task.id}-${item.occurrenceKey}`}
-                    key={`${item.task.id}-${item.occurrenceKey}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedTaskId(item.task.id, item.occurrenceDate);
-                    }}
-                    className={cn(
-                      "flex min-h-0 items-center overflow-hidden rounded-lg border px-2.5 py-1.5 text-[10px] font-body font-medium leading-[1.15] transition-all hover:shadow-sm",
-                      item.isCompleted 
-                        ? "bg-primary/5 text-outline/60 line-through border-transparent" 
-                        : "bg-primary/5 text-primary border-primary/10 hover:border-primary/30"
-                    )}
-                  >
-                    <span className="block truncate">{item.task.title}</span>
-                  </motion.div>
-                ))}
+      <div className="relative border-b border-outline-variant/10 bg-white/60 backdrop-blur-md">
+        <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 lg:gap-8">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-medium tracking-tight text-primary italic">
+                {scheduleTitle}
+              </h2>
+              <div className="flex items-center gap-1 rounded-full border border-primary/10 bg-primary/5 p-1">
+                <button
+                  onClick={() => shiftVisibleRange('previous')}
+                  className="touch-target flex items-center justify-center rounded-full p-2 text-primary/60 transition-colors hover:bg-primary/10 hover:text-primary"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={resetVisibleRange}
+                  className="touch-target rounded-full px-3 py-2 text-[9px] font-label font-bold uppercase tracking-[0.2em] text-primary/80 transition-colors hover:bg-primary/10 sm:px-5"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => shiftVisibleRange('next')}
+                  className="touch-target flex items-center justify-center rounded-full p-2 text-primary/60 transition-colors hover:bg-primary/10 hover:text-primary"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
             </div>
-          );
-        })}
+
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">
+              <button
+                ref={customScheduleButtonRef}
+                onClick={() => setIsCustomScheduleOpen((open) => !open)}
+                className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/10"
+              >
+                <CalendarRange className="h-3.5 w-3.5" />
+                Create Custom Schedule
+              </button>
+
+              <div className="flex items-center rounded-full border border-primary/10 bg-white shadow-sm">
+                <button
+                  onClick={() => {
+                    if (isSearchOpen && !scheduleSearchQuery) {
+                      setIsSearchOpen(false);
+                      return;
+                    }
+
+                    setIsSearchOpen(true);
+                  }}
+                  className="touch-target flex items-center justify-center rounded-full p-2.5 text-primary/60 transition-colors hover:bg-primary/5 hover:text-primary"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {isSearchOpen && (
+                    <motion.div
+                      initial={{ width: 0, opacity: 0 }}
+                      animate={{ width: 208, opacity: 1 }}
+                      exit={{ width: 0, opacity: 0 }}
+                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 pr-2">
+                        <input
+                          ref={searchInputRef}
+                          type="text"
+                          value={scheduleSearchQuery}
+                          onChange={(event) => setScheduleSearchQuery(event.target.value)}
+                          placeholder="Search tasks or days"
+                          className="w-full bg-transparent py-2 text-sm font-body text-primary outline-none placeholder:text-outline/35"
+                        />
+                        {(scheduleSearchQuery || isSearchOpen) && (
+                          <button
+                            onClick={() => {
+                              if (scheduleSearchQuery) {
+                                setScheduleSearchQuery('');
+                                searchInputRef.current?.focus();
+                                return;
+                              }
+
+                              setIsSearchOpen(false);
+                            }}
+                            className="rounded-full p-1 text-outline/45 transition-colors hover:bg-primary/5 hover:text-primary"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isExportingPdf}
+                className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-white px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {isExportingPdf ? 'Preparing PDF' : 'Download'}
+              </button>
+            </div>
+          </div>
+
+          {calendarRangeMode === 'custom' && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-primary/[0.03] px-4 py-3">
+              <div>
+                <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Custom Range Active</p>
+                <p className="mt-1 text-sm font-body font-medium text-primary">{formatScheduleTitle(normalizedCustomRange.start, normalizedCustomRange.end)}</p>
+              </div>
+              <button
+                onClick={() => setCalendarRangeMode('month')}
+                className="rounded-full border border-primary/10 bg-white px-3 py-2 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-primary/70 transition-all hover:border-primary/20 hover:bg-primary/5"
+              >
+                Use Month View
+              </button>
+            </div>
+          )}
+        </div>
+
+        <AnimatePresence>
+          {isCustomScheduleOpen && (
+            <motion.div
+              ref={customSchedulePanelRef}
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.98 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+              className="absolute left-4 right-4 top-full z-30 mt-3 sm:left-auto sm:right-6 sm:w-[26rem] lg:right-10"
+            >
+              <div className="rounded-3xl border border-outline-variant/20 bg-white/95 p-4 shadow-2xl backdrop-blur-xl">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Schedule View</p>
+                    <h3 className="mt-1 text-lg font-headline font-medium italic text-primary">Custom Schedule Builder</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsCustomScheduleOpen(false)}
+                    className="rounded-full p-2 text-outline/50 transition-colors hover:bg-primary/5 hover:text-primary"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2 rounded-full border border-primary/10 bg-primary/5 p-1">
+                  <button
+                    onClick={() => setCalendarRangeMode('month')}
+                    className={cn(
+                      "rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200",
+                      calendarRangeMode === 'month'
+                        ? "bg-white text-primary shadow-sm"
+                        : "text-outline/60 hover:text-primary"
+                    )}
+                  >
+                    Standard Month
+                  </button>
+                  <button
+                    onClick={() => setCalendarRangeMode('custom')}
+                    className={cn(
+                      "rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200",
+                      calendarRangeMode === 'custom'
+                        ? "bg-white text-primary shadow-sm"
+                        : "text-outline/60 hover:text-primary"
+                    )}
+                  >
+                    Custom Range
+                  </button>
+                </div>
+
+                {calendarRangeMode === 'month' ? (
+                  <div className="mt-4 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest/40 px-4 py-3">
+                    <p className="text-[10px] font-body leading-relaxed text-outline/70">
+                      Stay in a clean month view, or switch to a non-standard date window for sprint planning, travel blocks, or launch weeks.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Start Date</span>
+                        <input
+                          type="date"
+                          value={toDateInputValue(normalizedCustomRange.start)}
+                          onChange={(event) => {
+                            const nextDate = parseDateInput(event.target.value);
+                            if (nextDate) {
+                              setCustomRangeStart(nextDate);
+                            }
+                          }}
+                          className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-3 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">End Date</span>
+                        <input
+                          type="date"
+                          value={toDateInputValue(normalizedCustomRange.end)}
+                          onChange={(event) => {
+                            const nextDate = parseDateInput(event.target.value, true);
+                            if (nextDate) {
+                              setCustomRangeEnd(nextDate);
+                            }
+                          }}
+                          className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-3 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: '7 Days', days: 6 },
+                        { label: '14 Days', days: 13 },
+                        { label: '30 Days', days: 29 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          onClick={() => {
+                            const today = new Date();
+                            setCalendarRangeMode('custom');
+                            setCustomRangeStart(startOfDay(today));
+                            setCustomRangeEnd(endOfDay(addDays(today, preset.days)));
+                          }}
+                          className="rounded-full border border-primary/10 bg-primary/5 px-3 py-2 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-primary/75 transition-all duration-200 hover:border-primary/20 hover:bg-primary/10"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="text-[10px] font-body leading-relaxed text-outline/65">
+                      The grid stays padded to full weeks, so the calendar remains easy to scan while only your chosen range gets emphasis.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div ref={calendarCaptureRef} className="flex min-h-0 flex-1 flex-col bg-white">
+        {/* Weekdays Header */}
+        <div className="grid grid-cols-7 border-b border-outline-variant/10 bg-white">
+          {weekDays.map((day) => (
+            <div key={day} className="py-5 text-center text-[9px] font-label font-bold uppercase tracking-[0.3em] text-outline/40">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto bg-white hide-scrollbar">
+          {calendarDays.map((day, idx) => {
+            const dayTasks = getDayTaskItems(day);
+            const dayLabelMatches = normalizedScheduleSearch
+              ? format(day, 'MMMM d EEEE').toLowerCase().includes(normalizedScheduleSearch)
+              : false;
+            const matchedDayTasks = normalizedScheduleSearch
+              ? dayTasks.filter(doesTaskMatchScheduleSearch)
+              : dayTasks;
+            const visibleDayTasks = normalizedScheduleSearch
+              ? matchedDayTasks.length > 0
+                ? matchedDayTasks.slice(0, 3)
+                : dayLabelMatches
+                  ? dayTasks.slice(0, 3)
+                  : []
+              : dayTasks.slice(0, 3);
+            const matchingCount = normalizedScheduleSearch
+              ? matchedDayTasks.length > 0
+                ? matchedDayTasks.length
+                : dayLabelMatches
+                  ? dayTasks.length
+                  : 0
+              : dayTasks.length;
+            const isInPrimaryRange = calendarRangeMode === 'month'
+              ? isSameMonth(day, activeRangeStart)
+              : day >= startOfDay(normalizedCustomRange.start) && day <= startOfDay(normalizedCustomRange.end);
+            const isCurrentDay = isToday(day);
+            const isSearchMatch = doesDayMatchScheduleSearch(day, dayTasks);
+
+            return (
+              <div
+                key={day.toISOString()}
+                onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
+                className={cn(
+                  "min-h-[4rem] cursor-pointer border-b border-r border-outline-variant/10 p-1.5 transition-all hover:bg-primary/[0.02] sm:min-h-[8rem] sm:p-2.5 lg:min-h-[13.5rem] lg:p-3.5 grid grid-rows-[auto_minmax(0,1fr)] gap-1 sm:gap-2.5",
+                  !isInPrimaryRange && "bg-primary/[0.01] opacity-35",
+                  normalizedScheduleSearch && !isSearchMatch && "opacity-45",
+                  normalizedScheduleSearch && isSearchMatch && "bg-primary/[0.04] shadow-[inset_0_0_0_1px_rgba(16,24,40,0.06)]",
+                  idx % 7 === 6 && "border-r-0"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-body font-bold transition-all sm:h-8 sm:w-8 sm:text-[12px]",
+                    isCurrentDay ? "bg-primary text-on-primary shadow-md" : "text-primary/60",
+                    normalizedScheduleSearch && isSearchMatch && !isCurrentDay && "bg-primary/10 text-primary"
+                  )}>
+                    {format(day, 'd')}
+                  </span>
+                  {matchingCount > 0 && (
+                    <span className="hidden text-[7px] font-label font-bold uppercase tracking-[0.15em] text-outline/40 sm:block sm:text-[8px]">
+                      {matchingCount}
+                    </span>
+                  )}
+                  {visibleDayTasks.length > 0 && (
+                    <div className="flex gap-0.5 sm:hidden">
+                      {visibleDayTasks.map((item) => (
+                        <div
+                          key={`${item.task.id}-${item.occurrenceKey}`}
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            normalizedScheduleSearch ? "bg-primary" : "bg-primary/50"
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden min-h-0 grid-rows-3 gap-1.5 overflow-hidden sm:grid lg:grid-rows-5">
+                  {visibleDayTasks.map((item) => (
+                    <motion.div
+                      layoutId={`${item.task.id}-${item.occurrenceKey}`}
+                      key={`${item.task.id}-${item.occurrenceKey}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedTaskId(item.task.id, item.occurrenceDate);
+                      }}
+                      className={cn(
+                        "flex min-h-0 items-center overflow-hidden rounded-lg border px-2.5 py-1.5 text-[10px] font-body font-medium leading-[1.15] transition-all hover:shadow-sm",
+                        item.isCompleted
+                          ? "border-transparent bg-primary/5 text-outline/60 line-through"
+                          : "border-primary/10 bg-primary/5 text-primary hover:border-primary/30",
+                        normalizedScheduleSearch && doesTaskMatchScheduleSearch(item) && "border-primary/25 bg-white shadow-sm"
+                      )}
+                    >
+                      <span className="block truncate">{item.task.title}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <AnimatePresence>
@@ -280,7 +754,7 @@ export function CalendarView() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/10 backdrop-blur-[8px]"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/10 backdrop-blur-[8px]"
             onClick={() => { setSelectedDate(null); resetDetails(); }}
           >
             <motion.div 
@@ -289,13 +763,15 @@ export function CalendarView() {
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl overflow-hidden shadow-2xl w-full max-w-2xl border border-outline-variant/20 flex flex-col max-h-[85vh]"
+              className="bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl w-full sm:max-w-2xl border border-outline-variant/20 flex flex-col max-h-[90vh] sm:max-h-[85vh]"
             >
               {/* Date Header & Quick Add */}
-              <div className="p-8 border-b border-outline-variant/10 bg-surface/50">
-                <div className="flex items-end justify-between mb-8">
+              <div className="p-5 sm:p-8 border-b border-outline-variant/10 bg-surface/50">
+                {/* Drag handle for mobile */}
+                <div className="w-10 h-1 rounded-full bg-outline-variant/40 mx-auto mb-4 sm:hidden" />
+                <div className="flex items-end justify-between mb-6 sm:mb-8">
                   <div>
-                    <h2 className="font-headline font-medium text-4xl tracking-tight text-primary">
+                    <h2 className="font-headline font-medium text-3xl sm:text-4xl tracking-tight text-primary">
                       {format(selectedDate, 'd')} {format(selectedDate, 'MMM')}
                     </h2>
                     <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-2 font-bold opacity-60">
@@ -304,15 +780,15 @@ export function CalendarView() {
                   </div>
                   <button 
                     onClick={() => { setSelectedDate(null); resetDetails(); }}
-                    className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors text-outline cursor-pointer"
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors text-outline cursor-pointer touch-target"
                   >
                     ×
                   </button>
                 </div>
 
                 {/* Customized Quick Add Bar for selected date */}
-                <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-outline-variant/10 shadow-sm focus-within:shadow-md focus-within:border-primary/20 transition-all duration-500">
-                  <div className="ml-4 w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center">
+                <div className="flex items-center gap-3 sm:gap-4 bg-white p-2 rounded-2xl border border-outline-variant/10 shadow-sm focus-within:shadow-md focus-within:border-primary/20 transition-all duration-500">
+                  <div className="ml-2 sm:ml-4 w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center">
                     <Plus className="w-5 h-5 text-primary/60" />
                   </div>
                   <input 
@@ -325,7 +801,7 @@ export function CalendarView() {
                     placeholder={`Capture a new objective for ${format(selectedDate, 'MMM d')}...`}
                     className="flex-1 bg-transparent border-none focus:ring-0 py-4 font-body text-lg tracking-tight placeholder:text-outline/40 outline-none"
                   />
-                  <div className="flex gap-4 px-6 border-l border-outline-variant/20">
+                  <div className="hidden sm:flex gap-4 px-6 border-l border-outline-variant/20">
                     <CalendarIcon className="w-5 h-5 text-primary cursor-pointer transition-colors" />
                     <Tag className="w-5 h-5 text-outline/40 cursor-pointer hover:text-primary transition-colors" />
                   </div>
@@ -544,7 +1020,16 @@ export function CalendarView() {
                 )}
               </AnimatePresence>
 
-              <div className="p-8 overflow-y-auto space-y-3 bg-surface-container-lowest/30">
+              <div className="p-5 sm:p-8 overflow-y-auto space-y-3 bg-surface-container-lowest/30 safe-area-bottom">
+                {normalizedScheduleSearch && selectedDayTasks.length > 0 && (
+                  <div className="rounded-2xl border border-primary/10 bg-white/80 px-4 py-3">
+                    <p className="text-[8px] font-label font-bold uppercase tracking-[0.2em] text-outline/50">Search Results</p>
+                    <p className="mt-1 text-sm font-body font-medium text-primary">
+                      Showing {selectedDayTasks.length} match{selectedDayTasks.length === 1 ? '' : 'es'} for “{scheduleSearchQuery.trim()}”
+                    </p>
+                  </div>
+                )}
+
                 {selectedDayTasks.length === 0 ? (
                   <div className="text-center py-16 text-outline flex flex-col items-center gap-4">
                     <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center">
@@ -552,7 +1037,11 @@ export function CalendarView() {
                     </div>
                     <div>
                       <p className="text-xl font-headline italic text-primary">Clear Schedule</p>
-                      <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">No objectives logged for this exact date</p>
+                      <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">
+                        {normalizedScheduleSearch
+                          ? 'No matching objectives for this search'
+                          : 'No objectives logged for this exact date'}
+                      </p>
                     </div>
                   </div>
                 ) : (

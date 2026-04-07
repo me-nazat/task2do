@@ -30,6 +30,8 @@ export interface Task {
   recurrence: string | null; // Can be simple string ("daily", "weekly") or JSON string for "custom"
   completedOccurrences: string | null;
   deletedOccurrences: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface List {
@@ -47,6 +49,7 @@ interface AppState {
   selectedTaskId: string | null;
   selectedTaskOccurrenceDate: string | null;
   isSidebarOpen: boolean;
+  isMobileSidebarOpen: boolean;
   isRightPaneOpen: boolean;
   isCollapsed: boolean;
   searchQuery: string;
@@ -65,6 +68,9 @@ interface AppState {
   setSelectedListId: (id: string | null) => void;
   setSelectedTaskId: (id: string | null, occurrenceDate?: Date | string | null) => void;
   toggleSidebar: () => void;
+  toggleMobileSidebar: () => void;
+  closeMobileSidebar: () => void;
+  setCurrentViewMobile: (view: ViewType, listId?: string | null) => void;
   toggleRightPane: () => void;
   toggleCollapsed: () => void;
   setCollapsed: (collapsed: boolean) => void;
@@ -131,6 +137,8 @@ const normalizeTask = (task: Partial<Task> & Pick<Task, 'id' | 'title'>): Task =
   recurrence: task.recurrence ?? null,
   completedOccurrences: task.completedOccurrences ?? null,
   deletedOccurrences: task.deletedOccurrences ?? null,
+  createdAt: normalizeDate(task.createdAt) ?? undefined,
+  updatedAt: normalizeDate(task.updatedAt) ?? undefined,
 });
 
 const normalizeList = (list: Partial<List> & Pick<List, 'id' | 'userId' | 'name'>): List => ({
@@ -167,6 +175,14 @@ const normalizeTaskPatch = (updates: Partial<Task>): Partial<Task> => {
 
   if ('deletedOccurrences' in updates) {
     patch.deletedOccurrences = updates.deletedOccurrences ?? null;
+  }
+
+  if ('createdAt' in updates) {
+    patch.createdAt = normalizeDate(updates.createdAt) ?? undefined;
+  }
+
+  if ('updatedAt' in updates) {
+    patch.updatedAt = normalizeDate(updates.updatedAt) ?? undefined;
   }
 
   return patch;
@@ -211,6 +227,7 @@ export const useStore = create<AppState>()(
       selectedTaskId: null,
       selectedTaskOccurrenceDate: null,
       isSidebarOpen: true,
+      isMobileSidebarOpen: false,
       isRightPaneOpen: false,
       isCollapsed: false,
       searchQuery: '',
@@ -233,6 +250,13 @@ export const useStore = create<AppState>()(
         isRightPaneOpen: !!id,
       }),
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+      toggleMobileSidebar: () => set((state) => ({ isMobileSidebarOpen: !state.isMobileSidebarOpen })),
+      closeMobileSidebar: () => set({ isMobileSidebarOpen: false }),
+      setCurrentViewMobile: (view, listId = null) => set({
+        currentView: view,
+        ...(listId !== undefined ? { selectedListId: listId } : {}),
+        isMobileSidebarOpen: false,
+      }),
       toggleRightPane: () => set((state) => ({ isRightPaneOpen: !state.isRightPaneOpen })),
       toggleCollapsed: () => set((state) => ({ isCollapsed: !state.isCollapsed })),
       setCollapsed: (collapsed) => set({ isCollapsed: collapsed }),
