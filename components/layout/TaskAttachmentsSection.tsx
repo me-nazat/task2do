@@ -1,6 +1,7 @@
 'use client';
 
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   CheckCircle2,
@@ -11,7 +12,6 @@ import {
   FileImage,
   FileText,
   FileVideo,
-  FolderOpen,
   LoaderCircle,
   Paperclip,
   UploadCloud,
@@ -24,10 +24,12 @@ import {
   MAX_TASK_ATTACHMENT_SIZE_BYTES,
   type TaskAttachmentRecord,
   type TaskAttachmentsResponse,
+  buildTaskAttachmentViewerHref,
 } from '@/lib/task-attachments';
 
 interface TaskAttachmentsSectionProps {
   taskId: string;
+  taskTitle: string;
 }
 
 type NoticeTone = 'error' | 'success' | 'info';
@@ -104,10 +106,9 @@ function mergeAttachments(nextFiles: TaskAttachmentRecord[], currentFiles: TaskA
   });
 }
 
-export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) {
+export function TaskAttachmentsSection({ taskId, taskTitle }: TaskAttachmentsSectionProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<TaskAttachmentRecord[]>([]);
-  const [folderUrl, setFolderUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -144,7 +145,6 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
 
         if (payload && 'files' in payload) {
           setAttachments(payload.files);
-          setFolderUrl(payload.folderUrl);
         }
       } catch (error) {
         showNotice('error', error instanceof Error ? error.message : 'Unable to load attachments right now.');
@@ -159,7 +159,6 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
 
   useEffect(() => {
     setAttachments([]);
-    setFolderUrl(null);
     setNotice(null);
     setUploadProgress(null);
     void fetchAttachments();
@@ -233,7 +232,6 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
             const nextFiles = payload.files.slice(0, 1);
             uploadedFiles.push(...nextFiles);
             setAttachments((currentFiles) => mergeAttachments(nextFiles, currentFiles));
-            setFolderUrl(payload.folderUrl);
           }
 
           setUploadProgress({
@@ -290,30 +288,19 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
       </div>
 
       <div className="rounded-[1.75rem] border border-outline-variant/10 bg-white p-4 sm:p-5 shadow-sm">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2.5">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
                 <h3 className="text-sm font-medium tracking-tight text-primary">Attach Files</h3>
-                <span className="rounded-full bg-primary/5 px-2.5 py-1 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-primary/70">
+                <span className="rounded-full bg-primary/5 px-2 py-1 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-primary/70">
                   {attachments.length}/{MAX_TASK_ATTACHMENT_FILES}
                 </span>
               </div>
-              <p className="text-[11px] leading-relaxed text-outline/55">{constraintsCopy}</p>
             </div>
 
-            <div className="flex items-center gap-2 self-start">
-              {folderUrl && (
-                <a
-                  href={folderUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="touch-target inline-flex items-center gap-2 rounded-full border border-outline-variant/10 px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/60 transition-all active:scale-95 active:bg-primary/5 lg:hover:border-primary/15 lg:hover:bg-primary/5 lg:hover:text-primary"
-                >
-                  <FolderOpen className="w-3.5 h-3.5" />
-                  Drive Folder
-                </a>
-              )}
+            <div className="flex flex-wrap items-center gap-2 self-start sm:justify-end">
+              <p className="text-[11px] text-outline/50 sm:max-w-[17rem] sm:text-right">{constraintsCopy}</p>
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
@@ -380,13 +367,13 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
           >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(191,219,254,0.24),transparent_50%)]" />
             <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-[13px] font-medium text-primary">
                   <UploadCloud className="w-4 h-4 text-primary/70" />
                   <span>Drop files here or use the picker</span>
                 </div>
-                <p className="text-[11px] leading-relaxed text-outline/55">
-                  Files upload directly into this objective’s Drive folder, so nothing is stored on the app server.
+                <p className="text-[11px] leading-relaxed text-outline/50">
+                  Files stay inside this objective’s private workspace and never leave Task2Do while viewing.
                 </p>
               </div>
               <button
@@ -394,7 +381,7 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
                 onClick={() => inputRef.current?.click()}
                 disabled={isUploading || remainingSlots === 0}
                 className={cn(
-                  'touch-target inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.16em] transition-all',
+                  'touch-target inline-flex items-center justify-center rounded-2xl px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.16em] transition-all',
                   isUploading || remainingSlots === 0
                     ? 'cursor-not-allowed bg-white/80 text-outline/35'
                     : 'bg-white text-primary shadow-sm active:scale-95 active:bg-primary/5 lg:hover:bg-primary/5'
@@ -411,7 +398,7 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                className={cn('flex items-center gap-2 rounded-2xl border px-3.5 py-3 text-sm shadow-sm', noticeStyles[notice.tone])}
+                className={cn('flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm shadow-sm', noticeStyles[notice.tone])}
               >
                 {notice.tone === 'success' ? (
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -424,7 +411,7 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
           </AnimatePresence>
 
           {isUploading && uploadProgress && (
-            <div className="space-y-2 rounded-2xl border border-primary/10 bg-primary/5 px-3.5 py-3">
+            <div className="space-y-2 rounded-2xl border border-primary/10 bg-primary/5 px-3.5 py-2.5">
               <div className="flex items-center justify-between gap-3 text-[10px] font-label font-bold uppercase tracking-[0.16em] text-primary/70">
                 <span>Uploading</span>
                 <span>
@@ -454,46 +441,43 @@ export function TaskAttachmentsSection({ taskId }: TaskAttachmentsSectionProps) 
             </div>
 
             {isLoading ? (
-              <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-low/30 px-4 py-5 text-[12px] text-outline/45">
+              <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-low/30 px-4 py-4 text-[12px] text-outline/45">
                 Loading files...
               </div>
             ) : attachments.length === 0 ? (
-              <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-low/30 px-4 py-5 text-[12px] leading-relaxed text-outline/45">
+              <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-low/30 px-4 py-4 text-[12px] leading-relaxed text-outline/45">
                 Nothing is attached yet. Your personal Drive folder is synced from your account, and the first upload will create this objective’s task folder automatically.
               </div>
             ) : (
               <div className="space-y-2">
                 {attachments.map((file) => {
                   const FileTypeIcon = pickFileIcon(file.mimeType, file.name);
+                  const viewerHref = buildTaskAttachmentViewerHref(taskTitle, taskId, file.id);
 
                   return (
                     <div
                       key={file.id}
-                      className="flex items-center gap-3 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-3.5 py-3 shadow-sm"
+                      className="flex items-center gap-3 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-3 py-2.5 shadow-sm"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/6 text-primary/70">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/6 text-primary/70">
                         <FileTypeIcon className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium text-primary">{file.name}</p>
-                        <p className="mt-1 text-[11px] text-outline/45">
+                        <p className="truncate text-[12px] font-medium text-primary">{file.name}</p>
+                        <p className="mt-0.5 text-[10px] text-outline/45">
                           {formatFileSize(file.size)}
                           {file.modifiedTime
                             ? ` • Updated ${formatDistanceToNow(new Date(file.modifiedTime), { addSuffix: true })}`
                             : ''}
                         </p>
                       </div>
-                      {file.webViewLink ? (
-                        <a
-                          href={file.webViewLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="touch-target inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/55 transition-all active:scale-95 active:bg-primary/5 active:text-primary lg:hover:bg-primary/5 lg:hover:text-primary"
-                        >
-                          Open
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      ) : null}
+                      <Link
+                        href={viewerHref}
+                        className="touch-target inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/55 transition-all active:scale-95 active:bg-primary/5 active:text-primary lg:hover:bg-primary/5 lg:hover:text-primary"
+                      >
+                        Open
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Link>
                     </div>
                   );
                 })}

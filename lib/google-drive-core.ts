@@ -8,6 +8,8 @@ import {
   MAX_TASK_ATTACHMENT_FILES,
   MAX_TASK_ATTACHMENT_SIZE_BYTES,
   type TaskAttachmentRecord,
+  inferTaskAttachmentPreviewKind,
+  isTaskAttachmentPrintable,
 } from '@/lib/task-attachments';
 
 const DRIVE_SCOPE = ['https://www.googleapis.com/auth/drive'];
@@ -33,6 +35,22 @@ interface TaskFolderLookupResult {
   taskFolderId: string | null;
   folderUrl: string | null;
   userFolderId: string | null;
+}
+
+interface TaskAttachmentLookupResult {
+  file: TaskAttachmentRecord;
+  taskFolderId: string;
+  folderUrl: string;
+}
+
+export interface TaskAttachmentContentResult extends TaskAttachmentLookupResult {
+  contentType: string;
+  contentLength: string | null;
+  contentRange: string | null;
+  etag: string | null;
+  lastModified: string | null;
+  status: number;
+  stream: Readable;
 }
 
 export interface DriveUserIdentity {
@@ -689,6 +707,141 @@ export async function listTaskAttachments({
         maxFiles: MAX_TASK_ATTACHMENT_FILES,
         maxFileSizeBytes: MAX_TASK_ATTACHMENT_SIZE_BYTES,
       },
+    };
+  } catch (error) {
+    throw toFriendlyDriveError(error);
+  }
+}
+
+async function resolveTaskAttachment(
+  drive: drive_v3.Drive,
+  {
+    userId,
+    userName,
+    userEmail,
+    taskTitle,
+    fileId,
+  }: {
+    userId: string;
+    userName?: string | null;
+    userEmail?: string | null;
+    taskTitle: string;
+    fileId: string;
+  }
+): Promise<TaskAttachmentLookupResult> {
+  const folder = await resolveTaskFolder(
+    drive,
+    {
+      userId,
+      name: userName,
+      email: userEmail,
+    },
+    taskTitle,
+    false
+  );
+
+  if (!folder.taskFolderId || !folder.folderUrl) {
+    throw new Error('This objective does not have an attachment folder yet.');
+  }
+
+  try {
+    const response = await drive.files.get({
+      fileId,
+      fields: 'id,name,mimeType,size,webViewLink,webContentLink,iconLink,modifiedTime,parents',
+      supportsAllDrives: true,
+    });
+
+    const parents = response.data.parents ?? [];
+
+    if (!parents.includes(folder.taskFolderId)) {
+      throw new Error('That file does not belong to this objective.');
+    }
+
+    return {
+      file: mapDriveFile(response.data),
+      taskFolderId: folder.taskFolderId,
+      folderUrl: folder.folderUrl,
+    };
+  } catch (error) {
+    throw toFriendlyDriveError(error);
+  }
+}
+
+export async function getTaskAttachmentMetadata({
+  userId,
+  userName,
+  userEmail,
+  taskTitle,
+  fileId,
+}: {
+  userId: string;
+  userName?: string | null;
+  userEmail?: string | null;
+  taskTitle: string;
+  fileId: string;
+}) {
+  const drive = await getDriveClient();
+  const attachment = await resolveTaskAttachment(drive, {
+    userId,
+    userName,
+    userEmail,
+    taskTitle,
+    fileId,
+  });
+
+  return {
+    ...attachment,
+    previewKind: inferTaskAttachmentPreviewKind(attachment.file.name, attachment.file.mimeType),
+    printable: isTaskAttachmentPrintable(attachment.file.name, attachment.file.mimeType),
+  };
+}
+
+export async function getTaskAttachmentContent({
+  userId,
+  userName,
+  userEmail,
+  taskTitle,
+  fileId,
+  range,
+}: {
+  userId: string;
+  userName?: string | null;
+  userEmail?: string | null;
+  taskTitle: string;
+  fileId: string;
+  range?: string | null;
+}): Promise<TaskAttachmentContentResult> {
+  const drive = await getDriveClient();
+  const attachment = await resolveTaskAttachment(drive, {
+    userId,
+    userName,
+    userEmail,
+    taskTitle,
+    fileId,
+  });
+
+  try {
+    const response = await drive.files.get(
+      {
+        fileId,
+        alt: 'media',
+        supportsAllDrives: true,
+      },
+      {
+        responseType: 'stream',
+        headers: range ? { Range: range } : undefined,
+      }
+    );
+
+    return {
+      ...attachment,
+      contentType: response.headers['content-type'] ?? attachment.file.mimeType ?? 'application/octet-stream',
+      contentLength: response.headers['content-length'] ?? null,
+      contentRange: response.headers['content-range'] ?? null,
+      etag: response.headers.etag ?? null,
+      lastModified: response.headers['last-modified'] ?? null,
+      status: response.status ?? (range ? 206 : 200),
+      stream: response.data as Readable,
     };
   } catch (error) {
     throw toFriendlyDriveError(error);

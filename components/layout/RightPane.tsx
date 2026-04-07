@@ -37,7 +37,7 @@ function MetadataRow({ icon: Icon, label, children, align = 'start' }: MetadataR
   return (
     <div
       className={cn(
-        'grid grid-cols-1 gap-y-1.5 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-x-4',
+        'grid grid-cols-1 gap-y-1 sm:grid-cols-[92px_minmax(0,1fr)] sm:gap-x-3.5',
         align === 'center' ? 'items-center' : 'items-start'
       )}
     >
@@ -51,7 +51,7 @@ function MetadataRow({ icon: Icon, label, children, align = 'start' }: MetadataR
 }
 
 const metadataSelectClassName =
-  'w-full max-w-full rounded-xl border border-outline-variant/10 bg-surface-container-low px-3.5 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/85 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20 active:bg-surface-container-high lg:hover:bg-surface-container-high';
+  'w-full max-w-full rounded-xl border border-outline-variant/10 bg-surface-container-low px-3 py-1.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/85 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20 active:bg-surface-container-high lg:hover:bg-surface-container-high';
 
 export function RightPane() {
   const { selectedTaskId, selectedTaskOccurrenceDate, tasks } = useStore();
@@ -242,7 +242,7 @@ function RightPaneTaskDetails({
         </div>
 
         {/* Properties */}
-        <div className="space-y-4 rounded-[1.75rem] border border-outline-variant/10 bg-white p-4 shadow-sm sm:space-y-4.5 sm:p-5 lg:p-6">
+        <div className="space-y-2.5 rounded-[1.75rem] border border-outline-variant/10 bg-white p-4 shadow-sm sm:space-y-3 sm:p-4 lg:p-5">
           <MetadataRow icon={CalendarIcon} label="Schedule">
             <DateTimePicker
               startDate={task.startDate ? new Date(task.startDate) : null}
@@ -258,11 +258,12 @@ function RightPaneTaskDetails({
                   alert(getClientErrorMessage(error, 'Unable to update the schedule right now.'));
                 }
               }}
+              density="compact"
             />
           </MetadataRow>
 
           <MetadataRow icon={Repeat} label="Repeat">
-            <div className="space-y-2.5">
+            <div className="space-y-1.5">
               <select
                 value={task.recurrence?.startsWith('custom:') ? 'custom' : (task.recurrence?.startsWith('weekly:') ? 'weekly' : (task.recurrence || 'none'))}
                 onChange={async (e) => {
@@ -288,8 +289,8 @@ function RightPaneTaskDetails({
               </select>
 
               {(task.recurrence?.startsWith('weekly:') || task.recurrence?.startsWith('custom:')) && (
-                <div className="space-y-2.5">
-                  <div className="flex flex-wrap gap-1.5">
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap gap-1">
                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
                       let isSelected = false;
                       let currentConfig: { days: number[]; times?: Record<number, string> } = { days: [] };
@@ -351,18 +352,18 @@ function RightPaneTaskDetails({
                   </div>
 
                   {task.recurrence?.startsWith('custom:') && (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <button
                         type="button"
                         onClick={() => setShowCustomTimes(!showCustomTimes)}
-                        className="inline-flex items-center gap-1.5 text-[9px] font-label font-bold uppercase tracking-[0.18em] text-primary/70 transition-colors active:text-primary lg:hover:text-primary"
+                        className="inline-flex min-h-8 items-center gap-1.5 rounded-full px-1 text-[9px] font-label font-bold uppercase tracking-[0.18em] text-primary/70 transition-colors active:text-primary lg:hover:text-primary"
                       >
                         <Plus className={cn('h-3 w-3 transition-transform', showCustomTimes && 'rotate-45')} />
                         {showCustomTimes ? 'Hide Custom Times' : 'Add Custom Time Also'}
                       </button>
 
                       {showCustomTimes && (
-                        <div className="space-y-2 rounded-2xl border border-primary/10 bg-primary/5 p-2.5">
+                        <div className="space-y-1.5 rounded-2xl border border-primary/10 bg-primary/5 p-2">
                           {(() => {
                             try {
                               const config = JSON.parse(task.recurrence.slice(7)) as { days: number[]; times: Record<number, string> };
@@ -372,8 +373,8 @@ function RightPaneTaskDetails({
                               }
 
                               return config.days.sort().map((dayIdx: number) => (
-                                <div key={dayIdx} className="flex items-center justify-between gap-3 rounded-xl bg-white/70 px-3 py-2">
-                                  <span className="w-14 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-outline/65">
+                                <div key={dayIdx} className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-2.5 py-1.5">
+                                  <span className="w-12 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-outline/65">
                                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayIdx]}
                                   </span>
                                   <input
@@ -387,7 +388,7 @@ function RightPaneTaskDetails({
                                         unwrapDatabaseResult(await updateTask(task.id, { recurrence: newVal }));
                                       } catch {}
                                     }}
-                                    className="h-9 rounded-xl border border-outline-variant/15 bg-white px-2.5 text-[12px] text-primary outline-none transition-all focus:ring-1 focus:ring-primary/20"
+                                    className="h-8 rounded-xl border border-outline-variant/15 bg-white px-2.5 text-[12px] text-primary outline-none transition-all focus:ring-1 focus:ring-primary/20"
                                   />
                                 </div>
                               ));
@@ -458,7 +459,7 @@ function RightPaneTaskDetails({
           </MetadataRow>
 
           <MetadataRow icon={Flag} label="Priority" align="center">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {[
                 { value: 0, label: 'None', color: 'text-outline/40' },
                 { value: 1, label: 'Low', color: 'text-info' },
@@ -477,7 +478,7 @@ function RightPaneTaskDetails({
                     }
                   }}
                   className={cn(
-                    'touch-target inline-flex items-center gap-2 rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.14em] transition-all active:scale-95',
+                    'touch-target inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-label font-bold uppercase tracking-[0.14em] transition-all active:scale-95',
                     task.priority === p.value
                       ? 'bg-surface-container-high text-primary shadow-sm'
                       : 'bg-surface-container-low text-outline/55 active:bg-surface-container-high active:text-primary lg:hover:bg-surface-container-high lg:hover:text-primary'
@@ -516,14 +517,14 @@ function RightPaneTaskDetails({
           <MetadataRow icon={Tag} label="Tags" align="center">
             <button
               type="button"
-              className="touch-target flex w-full items-center rounded-xl border border-dashed border-outline-variant/20 px-3.5 py-2 text-left text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/45 transition-all active:border-primary/20 active:bg-primary/5 active:text-primary lg:hover:border-primary/20 lg:hover:bg-primary/5 lg:hover:text-primary"
+              className="touch-target flex w-full items-center rounded-xl border border-dashed border-outline-variant/20 px-3 py-1.5 text-left text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/45 transition-all active:border-primary/20 active:bg-primary/5 active:text-primary lg:hover:border-primary/20 lg:hover:bg-primary/5 lg:hover:text-primary"
             >
               Add identifiers...
             </button>
           </MetadataRow>
         </div>
 
-        <TaskAttachmentsSection taskId={task.id} />
+        <TaskAttachmentsSection taskId={task.id} taskTitle={task.title} />
 
         {/* Description / Context & Notes */}
         <div className="space-y-4">
