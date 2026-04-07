@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 
 import { google, drive_v3 } from 'googleapis';
@@ -15,6 +16,7 @@ const DEFAULT_DRIVE_ROOT_FOLDER_ID = '19awMDkoX3z3Ed-eQU2AkdO1YM48Nr_0d';
 const TASK2DO_TYPE_APP_PROPERTY = 'task2doType';
 const TASK2DO_USER_ID_APP_PROPERTY = 'task2doUserId';
 const TASK2DO_USER_FOLDER_TYPE = 'user-folder';
+const LOCAL_ENV_FILES = ['.env.local', '.env'];
 
 type DriveAppProperties = Record<string, string>;
 
@@ -96,11 +98,17 @@ function toFriendlyDriveError(error: unknown) {
     );
   }
 
+  if (message.includes('Service Accounts do not have storage quota')) {
+    return new Error(
+      'This Drive root is in a personal Google Drive, so service-account uploads cannot store files there. Configure Google OAuth user credentials for the Drive owner, or move the root folder to a supported shared-drive setup.'
+    );
+  }
+
   return new Error(message);
 }
 
 function getDriveRootFolderId() {
-  const rawValue = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim();
+  const rawValue = readConfigValue('GOOGLE_DRIVE_ROOT_FOLDER_ID');
 
   if (!rawValue) {
     return DEFAULT_DRIVE_ROOT_FOLDER_ID;
@@ -108,6 +116,70 @@ function getDriveRootFolderId() {
 
   const matchedFolderId = rawValue.match(/folders\/([a-zA-Z0-9_-]+)/)?.[1];
   return matchedFolderId ?? rawValue;
+}
+
+function stripWrappingQuotes(value: string) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
+}
+
+async function loadLocalEnvFileValues() {
+  const values: Record<string, string> = {};
+
+  for (const fileName of LOCAL_ENV_FILES) {
+    try {
+      const fileContents = await readFile(path.join(process.cwd(), fileName), 'utf8');
+      const lines = fileContents.split(/\r?\n/);
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        if (!trimmedLine || trimmedLine.startsWith('#')) {
+          continue;
+        }
+
+        const separatorIndex = trimmedLine.indexOf('=');
+
+        if (separatorIndex === -1) {
+          continue;
+        }
+
+        const key = trimmedLine.slice(0, separatorIndex).trim();
+        const rawValue = trimmedLine.slice(separatorIndex + 1).trim();
+
+        if (!key || key in values) {
+          continue;
+        }
+
+        values[key] = stripWrappingQuotes(rawValue);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return values;
+}
+
+async function readConfigValueAsync(key: string) {
+  const runtimeValue = process.env[key]?.trim();
+
+  if (runtimeValue) {
+    return runtimeValue;
+  }
+
+  const localEnvValues = await loadLocalEnvFileValues();
+  return localEnvValues[key]?.trim();
+}
+
+function readConfigValue(key: string) {
+  return process.env[key]?.trim();
 }
 
 function normalizeServiceAccountCredentials(parsed: {
@@ -123,7 +195,7 @@ function normalizeServiceAccountCredentials(parsed: {
 }
 
 async function getDriveCredentials() {
-  const rawJson = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON?.trim();
+  const rawJson = await readConfigValueAsync('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON');
 
   if (rawJson) {
     return normalizeServiceAccountCredentials(JSON.parse(rawJson) as {
@@ -133,21 +205,31 @@ async function getDriveCredentials() {
     });
   }
 
-  const serviceAccountFile = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE?.trim();
+  const serviceAccountFile = await readConfigValueAsync('GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE');
 
   if (serviceAccountFile) {
-    const fileContents = await readFile(serviceAccountFile, 'utf8');
-    return normalizeServiceAccountCredentials(JSON.parse(fileContents) as {
-      client_email?: string;
-      private_key?: string;
-      project_id?: string;
-    });
+    try {
+      const fileContents = await readFile(serviceAccountFile, 'utf8');
+      return normalizeServiceAccountCredentials(JSON.parse(fileContents) as {
+        client_email?: string;
+        private_key?: string;
+        project_id?: string;
+      });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(
+          `Google Drive service account file was not found at "${serviceAccountFile}". Update GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE, or configure Google OAuth credentials instead.`
+        );
+      }
+
+      throw error;
+    }
   }
 
   return {
-    client_email: process.env.GOOGLE_DRIVE_CLIENT_EMAIL?.trim(),
-    private_key: process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    project_id: process.env.GOOGLE_DRIVE_PROJECT_ID?.trim(),
+    client_email: await readConfigValueAsync('GOOGLE_DRIVE_CLIENT_EMAIL'),
+    private_key: (await readConfigValueAsync('GOOGLE_DRIVE_PRIVATE_KEY'))?.replace(/\\n/g, '\n'),
+    project_id: await readConfigValueAsync('GOOGLE_DRIVE_PROJECT_ID'),
   };
 }
 
@@ -212,11 +294,22 @@ function mapDriveFolder(file: drive_v3.Schema$File): DriveFolderRecord {
 }
 
 async function getDriveClient() {
+  const oauthClientId = await readConfigValueAsync('GOOGLE_DRIVE_OAUTH_CLIENT_ID');
+  const oauthClientSecret = await readConfigValueAsync('GOOGLE_DRIVE_OAUTH_CLIENT_SECRET');
+  const oauthRefreshToken = await readConfigValueAsync('GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN');
+
+  if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+    const auth = new google.auth.OAuth2(oauthClientId, oauthClientSecret);
+    auth.setCredentials({ refresh_token: oauthRefreshToken });
+
+    return google.drive({ version: 'v3', auth });
+  }
+
   const credentials = await getDriveCredentials();
 
   if (!credentials.client_email || !credentials.private_key) {
     throw new Error(
-      'Google Drive uploads are not configured. Add GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE, GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON, or GOOGLE_DRIVE_CLIENT_EMAIL and GOOGLE_DRIVE_PRIVATE_KEY.'
+      'Google Drive uploads are not configured. Add GOOGLE_DRIVE_OAUTH_CLIENT_ID, GOOGLE_DRIVE_OAUTH_CLIENT_SECRET, and GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN, or GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE, GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON, or GOOGLE_DRIVE_CLIENT_EMAIL and GOOGLE_DRIVE_PRIVATE_KEY.'
     );
   }
 
