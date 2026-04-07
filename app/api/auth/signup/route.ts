@@ -4,6 +4,7 @@ import { toPublicDatabaseError } from '@/db/errors';
 import { users } from '@/db/schema';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { ensureUserDriveFolder } from '@/lib/google-drive';
 
 export async function POST(req: Request) {
   const { name, email, password } = await req.json();
@@ -20,6 +21,20 @@ export async function POST(req: Request) {
       password: hashedPassword,
       createdAt: new Date(),
     });
+
+    try {
+      await ensureUserDriveFolder({
+        userId,
+        name,
+        email: lowerEmail,
+      });
+    } catch (driveError) {
+      console.error('Signup Drive folder sync failed', {
+        userId,
+        email: lowerEmail,
+        error: driveError,
+      });
+    }
 
     return NextResponse.json({ message: 'User created' });
   } catch (err: any) {

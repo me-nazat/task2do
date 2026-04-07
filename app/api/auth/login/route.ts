@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { eq } from 'drizzle-orm';
+import { ensureUserDriveFolder } from '@/lib/google-drive';
 
 export async function POST(req: Request) {
   const { email, password } = await req.json();
@@ -39,6 +40,20 @@ export async function POST(req: Request) {
       maxAge: 30 * 24 * 60 * 60, // 30 days
       path: '/',
     });
+
+    try {
+      await ensureUserDriveFolder({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+      });
+    } catch (driveError) {
+      console.error('Login Drive folder sync failed', {
+        userId: user.id,
+        email: user.email,
+        error: driveError,
+      });
+    }
 
     return NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } });
   } catch (err: any) {
