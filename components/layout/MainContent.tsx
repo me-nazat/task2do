@@ -13,6 +13,7 @@ import { KanbanView } from '@/components/views/KanbanView';
 import { CalendarView } from '@/components/views/CalendarView';
 import { HabitTrackerView } from '@/components/views/HabitTrackerView';
 import { AIChatView } from '@/components/views/AIChatView';
+import { PocketTrackerView } from '@/components/views/PocketTrackerView';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { AlertBanner } from '@/components/ui/AlertBanner';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
@@ -517,7 +518,7 @@ export function MainContent() {
         <div className="max-w-5xl mx-auto">
           
           {/* Quick Add Bar */}
-          {currentView !== 'calendar' && currentView !== 'ai-chat' && currentView !== 'completed-reminders' && (
+          {currentView !== 'calendar' && currentView !== 'ai-chat' && currentView !== 'completed-reminders' && currentView !== 'pocket-tracker' && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1043,6 +1044,11 @@ export function MainContent() {
             {currentView === 'habits' && (
               <motion.div key="view-habits" {...viewTransition}>
                 <HabitTrackerView />
+              </motion.div>
+            )}
+            {currentView === 'pocket-tracker' && (
+              <motion.div key="view-pocket-tracker" {...viewTransition}>
+                <PocketTrackerView />
               </motion.div>
             )}
             {currentView === 'ai-chat' && (

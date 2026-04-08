@@ -67,7 +67,7 @@ export function TaskAttachmentViewer({ fileToken, taskName }: TaskAttachmentView
       setError(null);
 
       try {
-        const response = await fetch(`/api/files/${fileToken}?meta=1`, {
+        const response = await fetch(`/api/files/view?token=${encodeURIComponent(fileToken)}&meta=1`, {
           cache: 'no-store',
         });
         const payload = (await response.json().catch(() => null)) as
@@ -223,9 +223,9 @@ export function TaskAttachmentViewer({ fileToken, taskName }: TaskAttachmentView
   }, [PreviewIcon, metadata]);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_32%),linear-gradient(180deg,#020617_0%,#0f172a_40%,#111827_100%)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col px-4 pb-6 pt-safe sm:px-6 lg:px-8">
-        <header className="sticky top-0 z-20 -mx-4 mb-5 border-b border-white/10 bg-slate-950/70 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_32%),linear-gradient(180deg,#020617_0%,#0f172a_40%,#111827_100%)] px-3 py-3 text-white sm:px-5 sm:py-5 lg:px-6 lg:py-6">
+      <div className="mx-auto flex min-h-[calc(100vh-1.5rem)] w-full max-w-[1580px] flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/70 shadow-[0_32px_120px_rgba(2,6,23,0.55)] backdrop-blur-2xl sm:min-h-[calc(100vh-2.5rem)] sm:rounded-[2.5rem]">
+        <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <button
@@ -267,7 +267,7 @@ export function TaskAttachmentViewer({ fileToken, taskName }: TaskAttachmentView
           </div>
         </header>
 
-        <div className="flex-1">
+        <div className="flex-1 px-4 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
           {isLoading ? (
             <div className="flex min-h-[70vh] items-center justify-center">
               <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-200">
@@ -301,7 +301,7 @@ export function TaskAttachmentViewer({ fileToken, taskName }: TaskAttachmentView
               </div>
             </div>
           ) : (
-            <div className={cn('min-h-[70vh]', metadata?.previewKind === 'unsupported' ? 'flex items-center justify-center' : 'h-[calc(100vh-9rem)]')}>
+            <div className={cn('min-h-[70vh]', metadata?.previewKind === 'unsupported' ? 'flex items-center justify-center' : 'h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)]')}>
               {preview}
             </div>
           )}

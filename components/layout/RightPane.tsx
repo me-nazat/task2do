@@ -37,11 +37,11 @@ function MetadataRow({ icon: Icon, label, children, align = 'start' }: MetadataR
   return (
     <div
       className={cn(
-        'grid grid-cols-1 gap-y-1 sm:grid-cols-[92px_minmax(0,1fr)] sm:gap-x-3.5',
+        'grid grid-cols-1 gap-y-0.5 sm:grid-cols-[82px_minmax(0,1fr)] sm:gap-x-3',
         align === 'center' ? 'items-center' : 'items-start'
       )}
     >
-      <div className="flex items-center gap-2 pt-0.5 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-outline/70">
+      <div className="flex items-center gap-1.5 pt-0.5 text-[8px] font-label font-bold uppercase tracking-[0.16em] text-outline/70">
         <Icon className="h-3.5 w-3.5 text-primary/55" />
         <span>{label}</span>
       </div>
@@ -51,7 +51,7 @@ function MetadataRow({ icon: Icon, label, children, align = 'start' }: MetadataR
 }
 
 const metadataSelectClassName =
-  'w-full max-w-full rounded-xl border border-outline-variant/10 bg-surface-container-low px-3 py-1.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/85 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20 active:bg-surface-container-high lg:hover:bg-surface-container-high';
+  'w-full max-w-full rounded-xl border border-outline-variant/10 bg-surface-container-low px-3 py-1 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/85 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20 active:bg-surface-container-high lg:hover:bg-surface-container-high';
 
 export function RightPane() {
   const { selectedTaskId, selectedTaskOccurrenceDate, tasks } = useStore();
@@ -205,7 +205,7 @@ function RightPaneTaskDetails({
   return (
     <div className="flex flex-col h-full bg-surface-container-low overflow-hidden">
       {/* Header */}
-      <div className="h-16 sm:h-20 border-b border-outline-variant/30 flex items-center justify-between px-4 sm:px-6 lg:px-10 shrink-0">
+      <div className="flex h-14 items-center justify-between border-b border-outline-variant/30 px-4 sm:h-16 sm:px-5 lg:px-6 shrink-0">
         <div className="flex items-center gap-3 text-[9px] font-label font-bold tracking-[0.2em] uppercase text-outline/70">
           <CheckSquare className="w-4 h-4 text-primary/60" />
           <span>Objective Details</span>
@@ -228,7 +228,7 @@ function RightPaneTaskDetails({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-10 space-y-6 sm:space-y-7 lg:space-y-8 safe-area-bottom">
+      <div className="safe-area-bottom flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-4 sm:space-y-5 sm:p-5 lg:space-y-6 lg:p-6">
         {/* Title */}
         <div>
           <input 
@@ -236,13 +236,13 @@ function RightPaneTaskDetails({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={handleTitleBlur}
-            className="w-full text-2xl sm:text-3xl lg:text-4xl font-light bg-transparent border-none focus:outline-none focus:ring-0 placeholder:text-outline/30 font-headline tracking-tight text-primary italic"
+            className="w-full border-none bg-transparent font-headline text-2xl font-light italic tracking-tight text-primary placeholder:text-outline/30 focus:outline-none focus:ring-0 sm:text-[2rem] lg:text-[2.5rem]"
             placeholder="Objective Title"
           />
         </div>
 
         {/* Properties */}
-        <div className="space-y-2.5 rounded-[1.75rem] border border-outline-variant/10 bg-white p-4 shadow-sm sm:space-y-3 sm:p-4 lg:p-5">
+        <div className="space-y-1.5 rounded-[1.75rem] border border-outline-variant/10 bg-white p-3 shadow-sm sm:space-y-2 sm:p-3.5 lg:p-4">
           <MetadataRow icon={CalendarIcon} label="Schedule">
             <DateTimePicker
               startDate={task.startDate ? new Date(task.startDate) : null}
@@ -263,7 +263,7 @@ function RightPaneTaskDetails({
           </MetadataRow>
 
           <MetadataRow icon={Repeat} label="Repeat">
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <select
                 value={task.recurrence?.startsWith('custom:') ? 'custom' : (task.recurrence?.startsWith('weekly:') ? 'weekly' : (task.recurrence || 'none'))}
                 onChange={async (e) => {
@@ -289,7 +289,7 @@ function RightPaneTaskDetails({
               </select>
 
               {(task.recurrence?.startsWith('weekly:') || task.recurrence?.startsWith('custom:')) && (
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <div className="flex flex-wrap gap-1">
                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
                       let isSelected = false;
@@ -339,7 +339,7 @@ function RightPaneTaskDetails({
                             }
                           }}
                           className={cn(
-                            'touch-target flex h-8 w-8 items-center justify-center rounded-full text-[9px] font-label font-bold uppercase tracking-[0.14em] transition-all active:scale-95',
+                            'touch-target flex h-7 w-7 items-center justify-center rounded-full text-[8px] font-label font-bold uppercase tracking-[0.14em] transition-all active:scale-95',
                             isSelected
                               ? 'bg-primary text-on-primary shadow-sm'
                               : 'bg-surface-container-low text-outline/60 active:bg-surface-container-high active:text-primary lg:hover:bg-surface-container-high lg:hover:text-primary'
@@ -352,18 +352,18 @@ function RightPaneTaskDetails({
                   </div>
 
                   {task.recurrence?.startsWith('custom:') && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <button
                         type="button"
                         onClick={() => setShowCustomTimes(!showCustomTimes)}
-                        className="inline-flex min-h-8 items-center gap-1.5 rounded-full px-1 text-[9px] font-label font-bold uppercase tracking-[0.18em] text-primary/70 transition-colors active:text-primary lg:hover:text-primary"
+                        className="inline-flex min-h-7 items-center gap-1.5 rounded-full px-1 text-[8px] font-label font-bold uppercase tracking-[0.18em] text-primary/70 transition-colors active:text-primary lg:hover:text-primary"
                       >
                         <Plus className={cn('h-3 w-3 transition-transform', showCustomTimes && 'rotate-45')} />
                         {showCustomTimes ? 'Hide Custom Times' : 'Add Custom Time Also'}
                       </button>
 
                       {showCustomTimes && (
-                        <div className="space-y-1.5 rounded-2xl border border-primary/10 bg-primary/5 p-2">
+                        <div className="space-y-1 rounded-2xl border border-primary/10 bg-primary/5 p-2">
                           {(() => {
                             try {
                               const config = JSON.parse(task.recurrence.slice(7)) as { days: number[]; times: Record<number, string> };
@@ -459,7 +459,7 @@ function RightPaneTaskDetails({
           </MetadataRow>
 
           <MetadataRow icon={Flag} label="Priority" align="center">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1">
               {[
                 { value: 0, label: 'None', color: 'text-outline/40' },
                 { value: 1, label: 'Low', color: 'text-info' },
@@ -478,7 +478,7 @@ function RightPaneTaskDetails({
                     }
                   }}
                   className={cn(
-                    'touch-target inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-label font-bold uppercase tracking-[0.14em] transition-all active:scale-95',
+                    'touch-target inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.25 text-[9px] font-label font-bold uppercase tracking-[0.14em] transition-all active:scale-95',
                     task.priority === p.value
                       ? 'bg-surface-container-high text-primary shadow-sm'
                       : 'bg-surface-container-low text-outline/55 active:bg-surface-container-high active:text-primary lg:hover:bg-surface-container-high lg:hover:text-primary'
@@ -517,7 +517,7 @@ function RightPaneTaskDetails({
           <MetadataRow icon={Tag} label="Tags" align="center">
             <button
               type="button"
-              className="touch-target flex w-full items-center rounded-xl border border-dashed border-outline-variant/20 px-3 py-1.5 text-left text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/45 transition-all active:border-primary/20 active:bg-primary/5 active:text-primary lg:hover:border-primary/20 lg:hover:bg-primary/5 lg:hover:text-primary"
+              className="touch-target flex w-full items-center rounded-xl border border-dashed border-outline-variant/20 px-3 py-1.5 text-left text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/45 transition-all active:border-primary/20 active:bg-primary/5 active:text-primary lg:hover:border-primary/20 lg:hover:bg-primary/5 lg:hover:text-primary"
             >
               Add identifiers...
             </button>

@@ -8,16 +8,11 @@ export interface TaskAttachmentRecord {
   name: string;
   mimeType: string | null;
   size: number;
-  webViewLink: string | null;
-  webContentLink: string | null;
-  iconLink: string | null;
   modifiedTime: string | null;
 }
 
 export interface TaskAttachmentsResponse {
   files: TaskAttachmentRecord[];
-  folderUrl: string | null;
-  taskFolderId: string | null;
   limit: {
     maxFiles: number;
     maxFileSizeBytes: number;

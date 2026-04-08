@@ -20,7 +20,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
-  CircleCheckBig
+  CircleCheckBig,
+  CircleDollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
@@ -85,6 +86,7 @@ export function Sidebar() {
     { id: 'kanban', label: 'Kanban', icon: LayoutDashboard, view: 'kanban' },
     { id: 'matrix', label: 'Matrix', icon: LayoutDashboard, view: 'matrix' },
     { id: 'habits', label: 'Habits', icon: CheckSquare, view: 'habits' },
+    { id: 'pocket-tracker', label: 'Pocket Tracker', icon: CircleDollarSign, view: 'pocket-tracker' },
     { id: 'completed-reminders', label: 'Completed & Alerts', icon: CircleCheckBig, view: 'completed-reminders' },
   ];
 

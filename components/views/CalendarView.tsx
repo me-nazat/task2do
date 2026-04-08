@@ -433,7 +433,7 @@ export function CalendarView() {
               <button
                 ref={customScheduleButtonRef}
                 onClick={() => setIsCustomScheduleOpen((open) => !open)}
-                className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/10"
+                className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-3.5 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/10"
               >
                 <CalendarRange className="h-3.5 w-3.5" />
                 Create Custom Schedule
@@ -506,7 +506,7 @@ export function CalendarView() {
           </div>
 
           {calendarRangeMode === 'custom' && (
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-primary/[0.03] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-primary/[0.03] px-4 py-2.5">
               <div>
                 <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Custom Range Active</p>
                 <p className="mt-1 text-sm font-body font-medium text-primary">{formatScheduleTitle(normalizedCustomRange.start, normalizedCustomRange.end)}</p>
@@ -577,8 +577,8 @@ export function CalendarView() {
                     </p>
                   </div>
                 ) : (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="mt-4 space-y-3">
+                    <div className="grid gap-2.5 sm:grid-cols-2">
                       <label className="space-y-2">
                         <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Start Date</span>
                         <input
@@ -590,7 +590,7 @@ export function CalendarView() {
                               setCustomRangeStart(nextDate);
                             }
                           }}
-                          className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-3 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
+                          className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-2.5 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
                         />
                       </label>
                       <label className="space-y-2">
@@ -604,7 +604,7 @@ export function CalendarView() {
                               setCustomRangeEnd(nextDate);
                             }
                           }}
-                          className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-3 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
+                          className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-2.5 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
                         />
                       </label>
                     </div>
@@ -641,19 +641,20 @@ export function CalendarView() {
         </AnimatePresence>
       </div>
 
-      <div ref={calendarCaptureRef} className="flex min-h-0 flex-1 flex-col bg-white">
-        {/* Weekdays Header */}
-        <div className="grid grid-cols-7 border-b border-outline-variant/10 bg-white">
-          {weekDays.map((day) => (
-            <div key={day} className="py-5 text-center text-[9px] font-label font-bold uppercase tracking-[0.3em] text-outline/40">
-              {day}
-            </div>
-          ))}
-        </div>
+      <div className="min-h-0 flex-1 overflow-x-auto">
+        <div ref={calendarCaptureRef} className="flex min-h-full min-w-[44rem] flex-col bg-white md:min-w-0">
+          {/* Weekdays Header */}
+          <div className="grid grid-cols-7 border-b border-outline-variant/10 bg-white">
+            {weekDays.map((day) => (
+              <div key={day} className="py-4 text-center text-[9px] font-label font-bold uppercase tracking-[0.3em] text-outline/40 sm:py-5">
+                {day}
+              </div>
+            ))}
+          </div>
 
-        {/* Calendar Grid */}
-        <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto bg-white hide-scrollbar">
-          {calendarDays.map((day, idx) => {
+          {/* Calendar Grid */}
+          <div className="hide-scrollbar grid flex-1 grid-cols-7 auto-rows-fr overflow-y-auto bg-white">
+            {calendarDays.map((day, idx) => {
             const dayTasks = getDayTaskItems(day);
             const dayLabelMatches = normalizedScheduleSearch
               ? format(day, 'MMMM d EEEE').toLowerCase().includes(normalizedScheduleSearch)
@@ -681,70 +682,71 @@ export function CalendarView() {
             const isCurrentDay = isToday(day);
             const isSearchMatch = doesDayMatchScheduleSearch(day, dayTasks);
 
-            return (
-              <div
-                key={day.toISOString()}
-                onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
-                className={cn(
-                  "min-h-[4rem] cursor-pointer border-b border-r border-outline-variant/10 p-1.5 transition-all hover:bg-primary/[0.02] sm:min-h-[8rem] sm:p-2.5 lg:min-h-[13.5rem] lg:p-3.5 grid grid-rows-[auto_minmax(0,1fr)] gap-1 sm:gap-2.5",
-                  !isInPrimaryRange && "bg-primary/[0.01] opacity-35",
-                  normalizedScheduleSearch && !isSearchMatch && "opacity-45",
-                  normalizedScheduleSearch && isSearchMatch && "bg-primary/[0.04] shadow-[inset_0_0_0_1px_rgba(16,24,40,0.06)]",
-                  idx % 7 === 6 && "border-r-0"
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <span className={cn(
-                    "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-body font-bold transition-all sm:h-8 sm:w-8 sm:text-[12px]",
-                    isCurrentDay ? "bg-primary text-on-primary shadow-md" : "text-primary/60",
-                    normalizedScheduleSearch && isSearchMatch && !isCurrentDay && "bg-primary/10 text-primary"
-                  )}>
-                    {format(day, 'd')}
-                  </span>
-                  {matchingCount > 0 && (
-                    <span className="hidden text-[7px] font-label font-bold uppercase tracking-[0.15em] text-outline/40 sm:block sm:text-[8px]">
-                      {matchingCount}
+              return (
+                <div
+                  key={day.toISOString()}
+                  onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
+                  className={cn(
+                    "grid min-h-[5.75rem] cursor-pointer grid-rows-[auto_minmax(0,1fr)] gap-1 border-b border-r border-outline-variant/10 p-2 transition-all hover:bg-primary/[0.02] sm:min-h-[8rem] sm:p-2.5 lg:min-h-[13.5rem] lg:p-3.5 lg:gap-2.5",
+                    !isInPrimaryRange && "bg-primary/[0.01] opacity-35",
+                    normalizedScheduleSearch && !isSearchMatch && "opacity-45",
+                    normalizedScheduleSearch && isSearchMatch && "bg-primary/[0.04] shadow-[inset_0_0_0_1px_rgba(16,24,40,0.06)]",
+                    idx % 7 === 6 && "border-r-0"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-body font-bold transition-all sm:h-8 sm:w-8 sm:text-[12px]",
+                      isCurrentDay ? "bg-primary text-on-primary shadow-md" : "text-primary/60",
+                      normalizedScheduleSearch && isSearchMatch && !isCurrentDay && "bg-primary/10 text-primary"
+                    )}>
+                      {format(day, 'd')}
                     </span>
-                  )}
-                  {visibleDayTasks.length > 0 && (
-                    <div className="flex gap-0.5 sm:hidden">
-                      {visibleDayTasks.map((item) => (
-                        <div
-                          key={`${item.task.id}-${item.occurrenceKey}`}
-                          className={cn(
-                            "h-1.5 w-1.5 rounded-full",
-                            normalizedScheduleSearch ? "bg-primary" : "bg-primary/50"
-                          )}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                    {matchingCount > 0 && (
+                      <span className="hidden text-[7px] font-label font-bold uppercase tracking-[0.15em] text-outline/40 sm:block sm:text-[8px]">
+                        {matchingCount}
+                      </span>
+                    )}
+                    {visibleDayTasks.length > 0 && (
+                      <div className="flex gap-0.5 sm:hidden">
+                        {visibleDayTasks.map((item) => (
+                          <div
+                            key={`${item.task.id}-${item.occurrenceKey}`}
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              normalizedScheduleSearch ? "bg-primary" : "bg-primary/50"
+                            )}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                <div className="hidden min-h-0 grid-rows-3 gap-1.5 overflow-hidden sm:grid lg:grid-rows-5">
-                  {visibleDayTasks.map((item) => (
-                    <motion.div
-                      layoutId={`${item.task.id}-${item.occurrenceKey}`}
-                      key={`${item.task.id}-${item.occurrenceKey}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedTaskId(item.task.id, item.occurrenceDate);
-                      }}
-                      className={cn(
-                        "flex min-h-0 items-center overflow-hidden rounded-lg border px-2.5 py-1.5 text-[10px] font-body font-medium leading-[1.15] transition-all hover:shadow-sm",
-                        item.isCompleted
-                          ? "border-transparent bg-primary/5 text-outline/60 line-through"
-                          : "border-primary/10 bg-primary/5 text-primary hover:border-primary/30",
-                        normalizedScheduleSearch && doesTaskMatchScheduleSearch(item) && "border-primary/25 bg-white shadow-sm"
-                      )}
-                    >
-                      <span className="block truncate">{item.task.title}</span>
-                    </motion.div>
-                  ))}
+                  <div className="hidden min-h-0 grid-rows-3 gap-1.5 overflow-hidden sm:grid lg:grid-rows-5">
+                    {visibleDayTasks.map((item) => (
+                      <motion.div
+                        layoutId={`${item.task.id}-${item.occurrenceKey}`}
+                        key={`${item.task.id}-${item.occurrenceKey}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedTaskId(item.task.id, item.occurrenceDate);
+                        }}
+                        className={cn(
+                          "flex min-h-0 items-center overflow-hidden rounded-lg border px-2.5 py-1.5 text-[10px] font-body font-medium leading-[1.15] transition-all hover:shadow-sm",
+                          item.isCompleted
+                            ? "border-transparent bg-primary/5 text-outline/60 line-through"
+                            : "border-primary/10 bg-primary/5 text-primary hover:border-primary/30",
+                          normalizedScheduleSearch && doesTaskMatchScheduleSearch(item) && "border-primary/25 bg-white shadow-sm"
+                        )}
+                      >
+                        <span className="block truncate">{item.task.title}</span>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 

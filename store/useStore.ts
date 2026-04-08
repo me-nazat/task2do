@@ -10,7 +10,7 @@ import {
   deriveChatSessionTitle,
 } from '@/lib/ai/task2do-chat';
 
-export type ViewType = 'list' | 'calendar' | 'matrix' | 'kanban' | 'habits' | 'today' | 'upcoming' | 'ai-chat' | 'completed-reminders';
+export type ViewType = 'list' | 'calendar' | 'matrix' | 'kanban' | 'habits' | 'pocket-tracker' | 'today' | 'upcoming' | 'ai-chat' | 'completed-reminders';
 
 export interface Task {
   id: string;

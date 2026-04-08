@@ -289,7 +289,7 @@ export function TaskAttachmentsSection({ taskId, taskTitle }: TaskAttachmentsSec
 
       <div className="rounded-[1.75rem] border border-outline-variant/10 bg-white p-4 sm:p-5 shadow-sm">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-0.5">
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-medium tracking-tight text-primary">Attach Files</h3>
@@ -300,7 +300,7 @@ export function TaskAttachmentsSection({ taskId, taskTitle }: TaskAttachmentsSec
             </div>
 
             <div className="flex flex-wrap items-center gap-2 self-start sm:justify-end">
-              <p className="text-[11px] text-outline/50 sm:max-w-[17rem] sm:text-right">{constraintsCopy}</p>
+              <p className="text-xs text-gray-500 sm:max-w-[22rem] sm:text-right">{constraintsCopy}</p>
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
@@ -359,19 +359,19 @@ export function TaskAttachmentsSection({ taskId, taskTitle }: TaskAttachmentsSec
               void uploadFiles(droppedFiles);
             }}
             className={cn(
-              'relative overflow-hidden rounded-2xl border border-dashed px-4 py-4 transition-all sm:px-5',
-              isDragging
-                ? 'border-primary/35 bg-primary/5 shadow-sm'
-                : 'border-outline-variant/20 bg-surface-container-low/35'
-            )}
-          >
+                'relative overflow-hidden rounded-2xl border border-dashed px-4 py-4 transition-all sm:px-5',
+                isDragging
+                  ? 'border-primary/35 bg-primary/5 shadow-sm'
+                  : 'border-outline-variant/20 bg-surface-container-low/35'
+              )}
+            >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(191,219,254,0.24),transparent_50%)]" />
-            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-[13px] font-medium text-primary">
-                  <UploadCloud className="w-4 h-4 text-primary/70" />
-                  <span>Drop files here or use the picker</span>
-                </div>
+              <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-[13px] font-medium text-primary">
+                    <UploadCloud className="w-4 h-4 text-primary/70" />
+                    <span>Drop files here or use the picker</span>
+                  </div>
                 <p className="text-[11px] leading-relaxed text-outline/50">
                   Files stay inside this objective’s private workspace and never leave Task2Do while viewing.
                 </p>
@@ -446,7 +446,7 @@ export function TaskAttachmentsSection({ taskId, taskTitle }: TaskAttachmentsSec
               </div>
             ) : attachments.length === 0 ? (
               <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-low/30 px-4 py-4 text-[12px] leading-relaxed text-outline/45">
-                Nothing is attached yet. Your personal Drive folder is synced from your account, and the first upload will create this objective’s task folder automatically.
+                Nothing is attached yet. The first upload will create this objective’s private folder automatically inside your Task2Do file workspace.
               </div>
             ) : (
               <div className="space-y-2">
@@ -457,9 +457,9 @@ export function TaskAttachmentsSection({ taskId, taskTitle }: TaskAttachmentsSec
                   return (
                     <div
                       key={file.id}
-                      className="flex items-center gap-3 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-3 py-2.5 shadow-sm"
+                      className="flex items-center gap-3 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-3 py-2 shadow-sm"
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/6 text-primary/70">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/6 text-primary/70">
                         <FileTypeIcon className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -473,7 +473,7 @@ export function TaskAttachmentsSection({ taskId, taskTitle }: TaskAttachmentsSec
                       </div>
                       <Link
                         href={viewerHref}
-                        className="touch-target inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/55 transition-all active:scale-95 active:bg-primary/5 active:text-primary lg:hover:bg-primary/5 lg:hover:text-primary"
+                        className="touch-target inline-flex items-center gap-1.5 rounded-full border border-outline-variant/10 bg-white px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-outline/55 transition-all active:scale-95 active:bg-primary/5 active:text-primary lg:hover:bg-primary/5 lg:hover:text-primary"
                       >
                         Open
                         <ExternalLink className="w-3.5 h-3.5" />

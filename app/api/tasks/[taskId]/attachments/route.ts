@@ -98,7 +98,10 @@ export async function GET(_request: Request, context: RouteContext) {
       userEmail: uploadContext.owner.email,
       taskTitle: uploadContext.task.title,
     });
-    const payload: TaskAttachmentsResponse = result;
+    const payload: TaskAttachmentsResponse = {
+      files: result.files,
+      limit: result.limit,
+    };
 
     return NextResponse.json(payload);
   } catch (error) {
@@ -163,7 +166,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     return NextResponse.json({
-      ...result,
+      files: result.files,
       limit: {
         maxFiles: MAX_TASK_ATTACHMENT_FILES,
         maxFileSizeBytes: MAX_TASK_ATTACHMENT_SIZE_BYTES,

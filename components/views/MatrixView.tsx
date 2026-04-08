@@ -115,7 +115,7 @@ export function MatrixView() {
   };
 
   return (
-    <div className="grid h-auto grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 md:grid-rows-2 lg:gap-8 md:min-h-[700px]">
+    <div className="flex h-auto flex-col gap-4 sm:gap-5 lg:grid lg:grid-cols-2 lg:grid-rows-2 lg:gap-8 lg:min-h-[700px]">
       {quadrants.map((quadrant) => {
         const quadrantTasks = tasks.filter(t => t.quadrant === quadrant.id && !t.parentId);
         
@@ -124,8 +124,8 @@ export function MatrixView() {
             key={quadrant.id}
             onDrop={(e) => handleDrop(e, quadrant.id)}
             onDragOver={handleDragOver}
-            className={cn("flex min-h-[18rem] flex-col rounded-2xl border bg-white/40 p-4 backdrop-blur-sm transition-all sm:min-h-[20rem] sm:p-6 lg:min-h-0 lg:p-8", quadrant.color)}>
-            <div className="flex items-center justify-between mb-4 sm:mb-6 lg:mb-8">
+            className={cn("flex min-h-[15rem] flex-col rounded-2xl border bg-white/40 p-4 backdrop-blur-sm transition-all sm:min-h-[16.5rem] sm:p-5 md:min-h-[17.5rem] lg:min-h-0 lg:p-8", quadrant.color)}>
+            <div className="mb-4 flex items-center justify-between sm:mb-5 lg:mb-8">
               <h3 className="font-headline font-medium text-lg sm:text-xl lg:text-2xl tracking-tight italic">{quadrant.title}</h3>
               <button 
                 onClick={() => openAddTaskModal(quadrant.id)}
@@ -201,7 +201,7 @@ export function MatrixView() {
                 </form>
               )}
             </Modal>
-            <div className="hide-scrollbar max-h-[15rem] flex-1 space-y-4 overflow-y-auto pr-1 sm:max-h-[18rem] sm:pr-2 md:max-h-none">
+            <div className="hide-scrollbar max-h-[11.5rem] flex-1 space-y-3 overflow-y-auto pr-1 sm:max-h-[13rem] sm:pr-2 md:max-h-[14rem] lg:max-h-none lg:space-y-4">
               {quadrantTasks.map(task => (
                 <div 
                   key={task.id}
@@ -209,7 +209,7 @@ export function MatrixView() {
                   onDragStart={(e) => handleDragStart(e, task.id)}
                   onClick={() => setSelectedTaskId(task.id)}
                   className={cn(
-                    "flex cursor-grab items-center gap-3 rounded-xl border border-outline-variant/10 bg-white p-4 shadow-sm transition-all active:cursor-grabbing active:scale-[0.99] sm:gap-4 sm:p-5 lg:hover:shadow-md",
+                    "flex cursor-grab items-center gap-3 rounded-xl border border-outline-variant/10 bg-white p-3.5 shadow-sm transition-all active:cursor-grabbing active:scale-[0.99] sm:gap-4 sm:p-4 lg:p-5 lg:hover:shadow-md",
                     task.isCompleted && "opacity-60 grayscale-[0.5]"
                   )}
                 >

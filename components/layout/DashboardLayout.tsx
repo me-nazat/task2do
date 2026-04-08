@@ -10,7 +10,7 @@ import { getTasks } from '@/actions/task';
 import { getLists } from '@/actions/list';
 import { NotificationManager } from '@/components/NotificationManager';
 import { Task, List } from '@/store/useStore';
-import { AlertTriangle, Bell, Calendar, Clock, Inbox, Menu, MoreHorizontal, Plus, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Bell, Calendar, Clock, Inbox, Menu, Plus, Sparkles, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { AlertBanner } from '@/components/ui/AlertBanner';
 import { PublicDatabaseError } from '@/db/errors';
@@ -129,7 +129,7 @@ export function DashboardLayout() {
         setCurrentView('list');
         setSelectedListId('inbox');
       } else {
-        const validViews = ['list', 'calendar', 'matrix', 'kanban', 'habits', 'today', 'upcoming', 'ai-chat', 'completed-reminders'];
+        const validViews = ['list', 'calendar', 'matrix', 'kanban', 'habits', 'pocket-tracker', 'today', 'upcoming', 'ai-chat', 'completed-reminders'];
         if (validViews.includes(viewId)) {
           setCurrentView(viewId as any);
         } else {
@@ -213,7 +213,9 @@ export function DashboardLayout() {
                   : currentView === 'today'
                     ? 'Today'
                     : currentView === 'ai-chat'
-                      ? 'AI Chat'
+                    ? 'AI Chat'
+                    : currentView === 'pocket-tracker'
+                      ? 'Pocket Tracker'
                       : currentView === 'list' && (!selectedListId || selectedListId === 'inbox')
                         ? 'Inbox'
                         : 'Task2Do'}
@@ -326,19 +328,19 @@ export function DashboardLayout() {
               </button>
             );
           })}
-          {/* More button — opens the drawer */}
+          {/* Menu button — opens the drawer */}
           <button
             onClick={toggleMobileSidebar}
             className="relative flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-1 transition-all duration-200 touch-target no-select text-outline/50 active:scale-95 active:text-primary/70"
           >
-            <MoreHorizontal className="w-5 h-5" />
-            <span className="text-[9px] font-label font-bold tracking-[0.1em] uppercase">More</span>
+            <Menu className="w-5 h-5" />
+            <span className="text-[9px] font-label font-bold tracking-[0.1em] uppercase">Menu</span>
           </button>
         </div>
       </nav>
 
       {/* ===== MOBILE: Floating Action Button (FAB) ===== */}
-      {currentView !== 'ai-chat' && currentView !== 'calendar' && (
+      {currentView !== 'ai-chat' && currentView !== 'calendar' && currentView !== 'pocket-tracker' && (
         <button
           onClick={() => {
             // Find and click the quick add modal trigger

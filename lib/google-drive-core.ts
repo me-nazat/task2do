@@ -289,9 +289,6 @@ function mapDriveFile(file: drive_v3.Schema$File): TaskAttachmentRecord {
     name: file.name ?? 'Untitled file',
     mimeType: file.mimeType ?? null,
     size: Number(file.size ?? 0),
-    webViewLink: file.webViewLink ?? null,
-    webContentLink: file.webContentLink ?? null,
-    iconLink: file.iconLink ?? null,
     modifiedTime: file.modifiedTime ?? null,
   };
 }
@@ -674,14 +671,12 @@ export async function listTaskAttachments({
   );
 
   if (!folder.taskFolderId) {
-    return {
-      files: [] as TaskAttachmentRecord[],
-      folderUrl: folder.folderUrl,
-      taskFolderId: null,
-      limit: {
-        maxFiles: MAX_TASK_ATTACHMENT_FILES,
-        maxFileSizeBytes: MAX_TASK_ATTACHMENT_SIZE_BYTES,
-      },
+      return {
+        files: [] as TaskAttachmentRecord[],
+        limit: {
+          maxFiles: MAX_TASK_ATTACHMENT_FILES,
+          maxFileSizeBytes: MAX_TASK_ATTACHMENT_SIZE_BYTES,
+        },
     };
   }
 
@@ -692,7 +687,7 @@ export async function listTaskAttachments({
         `mimeType != '${DRIVE_FOLDER_MIME_TYPE}'`,
         'trashed = false',
       ].join(' and '),
-      fields: 'files(id,name,mimeType,size,webViewLink,webContentLink,iconLink,modifiedTime)',
+      fields: 'files(id,name,mimeType,size,modifiedTime)',
       orderBy: 'modifiedTime desc',
       pageSize: MAX_TASK_ATTACHMENT_FILES,
       includeItemsFromAllDrives: true,
@@ -701,8 +696,6 @@ export async function listTaskAttachments({
 
     return {
       files: (response.data.files ?? []).map(mapDriveFile),
-      folderUrl: folder.folderUrl,
-      taskFolderId: folder.taskFolderId,
       limit: {
         maxFiles: MAX_TASK_ATTACHMENT_FILES,
         maxFileSizeBytes: MAX_TASK_ATTACHMENT_SIZE_BYTES,
@@ -747,7 +740,7 @@ async function resolveTaskAttachment(
   try {
     const response = await drive.files.get({
       fileId,
-      fields: 'id,name,mimeType,size,webViewLink,webContentLink,iconLink,modifiedTime,parents',
+      fields: 'id,name,mimeType,size,modifiedTime,parents',
       supportsAllDrives: true,
     });
 
@@ -891,7 +884,7 @@ export async function uploadFilesToTaskFolder({
           mimeType,
           body: Readable.fromWeb(file.stream() as any),
         },
-        fields: 'id,name,mimeType,size,webViewLink,webContentLink,iconLink,modifiedTime',
+        fields: 'id,name,mimeType,size,modifiedTime',
         supportsAllDrives: true,
       });
 
