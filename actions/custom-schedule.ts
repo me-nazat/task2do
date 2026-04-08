@@ -79,3 +79,15 @@ export async function createCustomSchedule(data: {
     return errorResult(error);
   }
 }
+
+export async function deleteCustomSchedule(id: string): Promise<DatabaseActionResult<null>> {
+  try {
+    await ensureCustomSchedulesTable();
+    await db.delete(customSchedules).where(eq(customSchedules.id, id));
+    revalidatePath('/');
+    return okResult(null);
+  } catch (error) {
+    console.error('Failed to delete custom schedule', error);
+    return errorResult(error);
+  }
+}

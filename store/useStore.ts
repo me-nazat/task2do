@@ -96,6 +96,7 @@ interface AppState {
   setLists: (lists: List[]) => void;
   setCustomSchedules: (customSchedules: CustomSchedule[]) => void;
   addCustomSchedule: (customSchedule: CustomSchedule) => void;
+  deleteCustomSchedule: (id: string) => void;
   setActiveScheduleView: (view: ActiveScheduleView) => void;
   hydrateCachedData: (userId: string) => boolean;
   setUser: (user: { id: string; email: string | null; displayName: string | null } | null) => void;
@@ -316,6 +317,11 @@ export const useStore = create<AppState>()(
       })),
       addCustomSchedule: (customSchedule) => set((state) => withUserSnapshot(state, {
         customSchedules: normalizeCustomSchedules([...state.customSchedules, normalizeCustomSchedule(customSchedule)]),
+      })),
+      deleteCustomSchedule: (id) => set((state) => withUserSnapshot(state, {
+        customSchedules: normalizeCustomSchedules(
+          state.customSchedules.filter((customSchedule) => customSchedule.id !== id)
+        ),
       })),
       setActiveScheduleView: (view) => set({ activeScheduleView: view }),
       hydrateCachedData: (userId) => {

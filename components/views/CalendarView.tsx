@@ -33,12 +33,14 @@ import {
   Search,
   Download,
   CalendarRange,
+  Trash2,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
-import { createCustomSchedule } from '@/actions/custom-schedule';
+import { flushSync } from 'react-dom';
+import { createCustomSchedule, deleteCustomSchedule as deleteCustomScheduleAction } from '@/actions/custom-schedule';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 import { buildTaskCompletionUpdate, getTaskOccurrences } from '@/lib/recurrence';
 import { exportScheduleGridToPdf } from '@/lib/export-schedule-pdf';
@@ -53,7 +55,6 @@ type CalendarDayItem = {
 type CustomScheduleBuilderMode = 'month' | 'custom';
 
 const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_VIEW_VALUE = '__month__';
 
 const toDateInputValue = (value: Date) => format(value, 'yyyy-MM-dd');
 
@@ -99,6 +100,14 @@ const buildSchedulePdfFileName = (start: Date, end: Date, isMonthView: boolean) 
     : `task2do-schedule-${format(start, 'yyyy-MM-dd')}-to-${format(end, 'yyyy-MM-dd')}.pdf`
 );
 
+const waitForViewCommit = async () => {
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+};
+
 export function CalendarView() {
   const {
     tasks,
@@ -109,6 +118,7 @@ export function CalendarView() {
     user,
     addTask,
     addCustomSchedule,
+    deleteCustomSchedule,
     updateTask: updateTaskState,
     deleteTask,
   } = useStore();
@@ -117,9 +127,12 @@ export function CalendarView() {
   const [draftEnd, setDraftEnd] = useState(() => endOfDay(addDays(new Date(), 13)));
   const [customViewOffset, setCustomViewOffset] = useState(0);
   const [isCustomScheduleOpen, setIsCustomScheduleOpen] = useState(false);
+  const [isScheduleLibraryOpen, setIsScheduleLibraryOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState('');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportingScheduleId, setExportingScheduleId] = useState<string | null>(null);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +140,8 @@ export function CalendarView() {
   const calendarCaptureRef = useRef<HTMLDivElement>(null);
   const customSchedulePanelRef = useRef<HTMLDivElement>(null);
   const customScheduleButtonRef = useRef<HTMLButtonElement>(null);
+  const scheduleLibraryPanelRef = useRef<HTMLDivElement>(null);
+  const scheduleLibraryButtonRef = useRef<HTMLButtonElement>(null);
   const lastMonthCursorRef = useRef(getDefaultMonthCursor());
 
   // Expandable details state
@@ -224,9 +239,9 @@ export function CalendarView() {
   const activeScheduleViewKey = activeScheduleView.type === 'month'
     ? activeScheduleView.monthCursor
     : activeScheduleView.scheduleId;
-  const activeScheduleSwitcherValue = activeScheduleView.type === 'custom'
-    ? activeScheduleView.scheduleId
-    : MONTH_VIEW_VALUE;
+  const activeScheduleLabel = isMonthScheduleView
+    ? 'Month View'
+    : activeCustomSchedule?.label ?? 'Saved Schedule';
 
   const resetDetails = () => {
     setShowDetails(false);
@@ -290,6 +305,27 @@ export function CalendarView() {
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [isCustomScheduleOpen]);
+
+  useEffect(() => {
+    if (!isScheduleLibraryOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (
+        scheduleLibraryPanelRef.current?.contains(target) ||
+        scheduleLibraryButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setIsScheduleLibraryOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isScheduleLibraryOpen]);
 
   useEffect(() => {
     if (activeScheduleView.type === 'custom' && !activeCustomSchedule && customSchedules.length > 0) {
@@ -494,6 +530,64 @@ export function CalendarView() {
     user,
   ]);
 
+  const handleSelectSavedSchedule = useCallback((scheduleId: string) => {
+    flushSync(() => {
+      setCustomViewOffset(0);
+      setActiveScheduleView({ type: 'custom', scheduleId });
+      setIsScheduleLibraryOpen(false);
+    });
+  }, [setActiveScheduleView]);
+
+  const handleDownloadSavedSchedule = useCallback(async (scheduleId: string) => {
+    const schedule = customSchedules.find((item) => item.id === scheduleId);
+    if (!schedule || !calendarCaptureRef.current) {
+      return;
+    }
+
+    const scheduleStart = startOfDay(new Date(schedule.startDate));
+    const scheduleEnd = endOfDay(new Date(schedule.endDate));
+    setExportingScheduleId(scheduleId);
+
+    try {
+      flushSync(() => {
+        setCustomViewOffset(0);
+        setActiveScheduleView({ type: 'custom', scheduleId });
+        setIsScheduleLibraryOpen(false);
+      });
+
+      await waitForViewCommit();
+
+      await exportScheduleGridToPdf(calendarCaptureRef.current, {
+        title: `Task2Do Schedule - ${schedule.label}`,
+        fileName: buildSchedulePdfFileName(scheduleStart, scheduleEnd, false),
+        orientationPreference: 'landscape',
+      });
+    } catch (error) {
+      console.error('Failed to export saved custom schedule as PDF', error);
+      alert('Unable to download the schedule PDF right now.');
+    } finally {
+      setExportingScheduleId(null);
+    }
+  }, [customSchedules, setActiveScheduleView]);
+
+  const handleDeleteSavedSchedule = useCallback(async (scheduleId: string) => {
+    setDeletingScheduleId(scheduleId);
+
+    try {
+      unwrapDatabaseResult(await deleteCustomScheduleAction(scheduleId));
+      deleteCustomSchedule(scheduleId);
+
+      if (activeScheduleView.type === 'custom' && activeScheduleView.scheduleId === scheduleId) {
+        activateMonthView(startOfMonth(new Date()));
+      }
+    } catch (error) {
+      console.error('Failed to delete custom schedule', error);
+      alert(getClientErrorMessage(error, 'Unable to delete the custom schedule right now.'));
+    } finally {
+      setDeletingScheduleId(null);
+    }
+  }, [activeScheduleView, activateMonthView, deleteCustomSchedule]);
+
   const handleDownloadPdf = useCallback(async () => {
     if (!calendarCaptureRef.current) {
       return;
@@ -545,33 +639,147 @@ export function CalendarView() {
                 {scheduleTitle}
               </h2>
 
-              <div className="relative flex items-center rounded-full border border-primary/10 bg-white px-3 py-2 shadow-sm">
-                <span className="pr-2 text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/45">
-                  View
-                </span>
-                <select
-                  value={isMonthScheduleView ? MONTH_VIEW_VALUE : activeScheduleSwitcherValue}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-
-                    if (nextValue === MONTH_VIEW_VALUE) {
-                      activateMonthView(activeMonthCursor);
-                      return;
-                    }
-
-                    setCustomViewOffset(0);
-                    setActiveScheduleView({ type: 'custom', scheduleId: nextValue });
+              <div className="relative">
+                <button
+                  ref={scheduleLibraryButtonRef}
+                  onClick={() => {
+                    setIsCustomScheduleOpen(false);
+                    setIsScheduleLibraryOpen((open) => !open);
                   }}
-                  className="appearance-none bg-transparent pr-6 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80 outline-none"
+                  className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-white px-3.5 py-2 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/5"
                 >
-                  <option value={MONTH_VIEW_VALUE}>Month View</option>
-                  {customSchedules.map((schedule) => (
-                    <option key={schedule.id} value={schedule.id}>
-                      {schedule.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-outline/45" />
+                  <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/45">
+                    Schedule Views
+                  </span>
+                  <span className="max-w-[12rem] truncate text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80">
+                    {activeScheduleLabel}
+                  </span>
+                  <ChevronDown className={cn('h-3.5 w-3.5 text-outline/45 transition-transform', isScheduleLibraryOpen && 'rotate-180')} />
+                </button>
+
+                <AnimatePresence>
+                  {isScheduleLibraryOpen && (
+                    <motion.div
+                      ref={scheduleLibraryPanelRef}
+                      initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                      className="absolute left-0 top-full z-30 mt-3 w-[min(28rem,calc(100vw-2rem))]"
+                    >
+                      <div className="rounded-3xl border border-outline-variant/20 bg-white/95 p-3.5 shadow-2xl backdrop-blur-xl">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">
+                              Schedule Library
+                            </p>
+                            <h3 className="mt-1 text-base font-headline font-medium italic text-primary">
+                              Saved Custom Schedules
+                            </h3>
+                          </div>
+                          <button
+                            onClick={() => setIsScheduleLibraryOpen(false)}
+                            className="rounded-full p-2 text-outline/50 transition-colors hover:bg-primary/5 hover:text-primary"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        <div className="mt-4 space-y-2">
+                          <button
+                            onClick={() => {
+                              activateMonthView(activeMonthCursor);
+                              setIsScheduleLibraryOpen(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center justify-between rounded-2xl border px-3.5 py-3 text-left transition-all duration-200',
+                              isMonthScheduleView
+                                ? 'border-primary/20 bg-primary/[0.05]'
+                                : 'border-outline-variant/10 bg-surface-container-lowest/40 hover:border-primary/15 hover:bg-primary/[0.03]'
+                            )}
+                          >
+                            <div>
+                              <p className="text-[8px] font-label font-bold uppercase tracking-[0.2em] text-outline/45">
+                                Default View
+                              </p>
+                              <p className="mt-1 text-sm font-body font-medium text-primary">
+                                Month View
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-primary/10 bg-white px-2.5 py-1 text-[8px] font-label font-bold uppercase tracking-[0.16em] text-primary/65">
+                              {isMonthScheduleView ? 'Active' : 'Open'}
+                            </span>
+                          </button>
+
+                          {customSchedules.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-outline-variant/15 bg-surface-container-lowest/30 px-4 py-5">
+                              <p className="text-[8px] font-label font-bold uppercase tracking-[0.2em] text-outline/45">
+                                No Saved Ranges Yet
+                              </p>
+                              <p className="mt-1 text-sm font-body text-outline/65">
+                                Create a custom schedule to save a reusable date window with its own export action.
+                              </p>
+                            </div>
+                          ) : (
+                            customSchedules.map((schedule) => {
+                              const isActiveSchedule = activeScheduleView.type === 'custom' && activeScheduleView.scheduleId === schedule.id;
+                              const isExportingThisSchedule = exportingScheduleId === schedule.id;
+                              const isDeletingThisSchedule = deletingScheduleId === schedule.id;
+
+                              return (
+                                <div
+                                  key={schedule.id}
+                                  className={cn(
+                                    'flex items-center gap-3 rounded-2xl border px-3.5 py-3 transition-all duration-200',
+                                    isActiveSchedule
+                                      ? 'border-primary/20 bg-primary/[0.05]'
+                                      : 'border-outline-variant/10 bg-white hover:border-primary/15 hover:bg-primary/[0.02]'
+                                  )}
+                                >
+                                  <button
+                                    onClick={() => handleSelectSavedSchedule(schedule.id)}
+                                    className="min-w-0 flex-1 text-left"
+                                  >
+                                    <p className="truncate text-sm font-body font-medium text-primary">
+                                      {schedule.label}
+                                    </p>
+                                    <p className="mt-1 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-outline/45">
+                                      {formatScheduleTitle(new Date(schedule.startDate), new Date(schedule.endDate))}
+                                    </p>
+                                  </button>
+
+                                  <div className="flex items-center gap-1.5">
+                                    {isActiveSchedule && (
+                                      <span className="rounded-full border border-primary/10 bg-white px-2.5 py-1 text-[8px] font-label font-bold uppercase tracking-[0.16em] text-primary/65">
+                                        Active
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() => handleDownloadSavedSchedule(schedule.id)}
+                                      disabled={isExportingThisSchedule || isDeletingThisSchedule}
+                                      className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/10 bg-white text-primary/70 transition-all duration-200 hover:border-primary/20 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                                      title={`Download ${schedule.label}`}
+                                    >
+                                      <Download className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteSavedSchedule(schedule.id)}
+                                      disabled={isDeletingThisSchedule || isExportingThisSchedule}
+                                      className="flex h-9 w-9 items-center justify-center rounded-full border border-outline-variant/15 bg-white text-outline/55 transition-all duration-200 hover:border-error/20 hover:bg-error/5 hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
+                                      title={`Delete ${schedule.label}`}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               <div className="flex items-center gap-1 rounded-full border border-primary/10 bg-primary/5 p-1">
@@ -605,6 +813,7 @@ export function CalendarView() {
                     return;
                   }
 
+                  setIsScheduleLibraryOpen(false);
                   seedBuilderFromActiveView();
                   setIsCustomScheduleOpen(true);
                 }}
