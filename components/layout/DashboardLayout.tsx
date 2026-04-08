@@ -8,8 +8,9 @@ import { RightPane } from './RightPane';
 import { cn } from '@/lib/utils';
 import { getTasks } from '@/actions/task';
 import { getLists } from '@/actions/list';
+import { getCustomSchedules } from '@/actions/custom-schedule';
 import { NotificationManager } from '@/components/NotificationManager';
-import { Task, List } from '@/store/useStore';
+import { Task, List, CustomSchedule } from '@/store/useStore';
 import { AlertTriangle, Bell, Calendar, Clock, Inbox, Menu, Plus, Sparkles, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { AlertBanner } from '@/components/ui/AlertBanner';
@@ -25,6 +26,7 @@ export function DashboardLayout() {
     isCollapsed,
     setTasks,
     setLists,
+    setCustomSchedules,
     selectedListId,
     selectedTaskId,
     selectedTaskOccurrenceDate,
@@ -52,6 +54,7 @@ export function DashboardLayout() {
     if (!user) {
       setTasks([]);
       setLists([]);
+      setCustomSchedules([]);
       queueMicrotask(() => {
         setDatabaseError(null);
       });
@@ -68,8 +71,8 @@ export function DashboardLayout() {
       }
     });
 
-    Promise.all([getTasks(user.id), getLists(user.id)])
-      .then(([taskResult, listResult]) => {
+    Promise.all([getTasks(user.id), getLists(user.id), getCustomSchedules(user.id)])
+      .then(([taskResult, listResult, customScheduleResult]) => {
         if (!isMounted) {
           return;
         }
@@ -93,6 +96,16 @@ export function DashboardLayout() {
         } else {
           setLists(listResult.data as List[]);
         }
+
+        if (!customScheduleResult.ok) {
+          console.error('Failed to get custom schedules:', customScheduleResult.error);
+          if (!hasCachedData) {
+            setCustomSchedules([]);
+          }
+          setDatabaseError((currentError) => currentError ?? customScheduleResult.error);
+        } else {
+          setCustomSchedules(customScheduleResult.data as CustomSchedule[]);
+        }
       })
       .catch((error) => {
         if (!isMounted) {
@@ -103,6 +116,7 @@ export function DashboardLayout() {
         if (!hasCachedData) {
           setTasks([]);
           setLists([]);
+          setCustomSchedules([]);
         }
         setDatabaseError({
           code: 'DB_UNAVAILABLE',
@@ -113,7 +127,7 @@ export function DashboardLayout() {
     return () => {
       isMounted = false;
     };
-  }, [hydrateCachedData, isAuthReady, setLists, setTasks, user]);
+  }, [hydrateCachedData, isAuthReady, setCustomSchedules, setLists, setTasks, user]);
 
   useEffect(() => {
     const parts = pathname.split('/').filter(Boolean);

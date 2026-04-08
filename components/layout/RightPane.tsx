@@ -37,12 +37,12 @@ function MetadataRow({ icon: Icon, label, children, align = 'start' }: MetadataR
   return (
     <div
       className={cn(
-        'grid grid-cols-1 gap-y-0.5 sm:grid-cols-[82px_minmax(0,1fr)] sm:gap-x-3',
+        'grid grid-cols-1 gap-y-0.5 sm:grid-cols-[76px_minmax(0,1fr)] sm:gap-x-2.5',
         align === 'center' ? 'items-center' : 'items-start'
       )}
     >
-      <div className="flex items-center gap-1.5 pt-0.5 text-[8px] font-label font-bold uppercase tracking-[0.16em] text-outline/70">
-        <Icon className="h-3.5 w-3.5 text-primary/55" />
+      <div className="flex items-center gap-1.25 pt-0.5 text-[8px] font-label font-bold uppercase tracking-[0.16em] text-outline/70">
+        <Icon className="h-3.25 w-3.25 text-primary/55" />
         <span>{label}</span>
       </div>
       <div className="min-w-0">{children}</div>
@@ -51,7 +51,7 @@ function MetadataRow({ icon: Icon, label, children, align = 'start' }: MetadataR
 }
 
 const metadataSelectClassName =
-  'w-full max-w-full rounded-xl border border-outline-variant/10 bg-surface-container-low px-3 py-1 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/85 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20 active:bg-surface-container-high lg:hover:bg-surface-container-high';
+  'w-full max-w-full rounded-lg border border-outline-variant/10 bg-surface-container-low px-2.5 py-1 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-primary/85 transition-all focus:outline-none focus:ring-1 focus:ring-primary/20 active:bg-surface-container-high lg:hover:bg-surface-container-high';
 
 export function RightPane() {
   const { selectedTaskId, selectedTaskOccurrenceDate, tasks } = useStore();
@@ -242,7 +242,7 @@ function RightPaneTaskDetails({
         </div>
 
         {/* Properties */}
-        <div className="space-y-1.5 rounded-[1.75rem] border border-outline-variant/10 bg-white p-3 shadow-sm sm:space-y-2 sm:p-3.5 lg:p-4">
+        <div className="space-y-1 rounded-[1.5rem] border border-outline-variant/10 bg-white p-2.5 shadow-sm sm:space-y-1.5 sm:p-3 lg:p-3.5">
           <MetadataRow icon={CalendarIcon} label="Schedule">
             <DateTimePicker
               startDate={task.startDate ? new Date(task.startDate) : null}
@@ -263,7 +263,7 @@ function RightPaneTaskDetails({
           </MetadataRow>
 
           <MetadataRow icon={Repeat} label="Repeat">
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <select
                 value={task.recurrence?.startsWith('custom:') ? 'custom' : (task.recurrence?.startsWith('weekly:') ? 'weekly' : (task.recurrence || 'none'))}
                 onChange={async (e) => {
@@ -290,7 +290,7 @@ function RightPaneTaskDetails({
 
               {(task.recurrence?.startsWith('weekly:') || task.recurrence?.startsWith('custom:')) && (
                 <div className="space-y-1">
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-[3px]">
                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
                       let isSelected = false;
                       let currentConfig: { days: number[]; times?: Record<number, string> } = { days: [] };
@@ -339,7 +339,7 @@ function RightPaneTaskDetails({
                             }
                           }}
                           className={cn(
-                            'touch-target flex h-7 w-7 items-center justify-center rounded-full text-[8px] font-label font-bold uppercase tracking-[0.14em] transition-all active:scale-95',
+                            'touch-target flex h-[26px] w-[26px] items-center justify-center rounded-full text-[8px] font-label font-bold uppercase tracking-[0.12em] transition-all active:scale-95',
                             isSelected
                               ? 'bg-primary text-on-primary shadow-sm'
                               : 'bg-surface-container-low text-outline/60 active:bg-surface-container-high active:text-primary lg:hover:bg-surface-container-high lg:hover:text-primary'
@@ -356,14 +356,14 @@ function RightPaneTaskDetails({
                       <button
                         type="button"
                         onClick={() => setShowCustomTimes(!showCustomTimes)}
-                        className="inline-flex min-h-7 items-center gap-1.5 rounded-full px-1 text-[8px] font-label font-bold uppercase tracking-[0.18em] text-primary/70 transition-colors active:text-primary lg:hover:text-primary"
+                        className="inline-flex min-h-[24px] items-center gap-1 rounded-full px-0.5 text-[8px] font-label font-bold uppercase tracking-[0.16em] text-primary/70 transition-colors active:text-primary lg:hover:text-primary"
                       >
                         <Plus className={cn('h-3 w-3 transition-transform', showCustomTimes && 'rotate-45')} />
                         {showCustomTimes ? 'Hide Custom Times' : 'Add Custom Time Also'}
                       </button>
 
                       {showCustomTimes && (
-                        <div className="space-y-1 rounded-2xl border border-primary/10 bg-primary/5 p-2">
+                        <div className="space-y-1 rounded-2xl border border-primary/10 bg-primary/5 p-1.5">
                           {(() => {
                             try {
                               const config = JSON.parse(task.recurrence.slice(7)) as { days: number[]; times: Record<number, string> };
@@ -373,7 +373,7 @@ function RightPaneTaskDetails({
                               }
 
                               return config.days.sort().map((dayIdx: number) => (
-                                <div key={dayIdx} className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-2.5 py-1.5">
+                                <div key={dayIdx} className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-2 py-[5px]">
                                   <span className="w-12 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-outline/65">
                                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayIdx]}
                                   </span>
@@ -388,7 +388,7 @@ function RightPaneTaskDetails({
                                         unwrapDatabaseResult(await updateTask(task.id, { recurrence: newVal }));
                                       } catch {}
                                     }}
-                                    className="h-8 rounded-xl border border-outline-variant/15 bg-white px-2.5 text-[12px] text-primary outline-none transition-all focus:ring-1 focus:ring-primary/20"
+                                    className="h-7 rounded-lg border border-outline-variant/15 bg-white px-2.5 text-[11px] text-primary outline-none transition-all focus:ring-1 focus:ring-primary/20"
                                   />
                                 </div>
                               ));

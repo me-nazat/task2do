@@ -1,3 +1,4 @@
+import { startOfMonth } from 'date-fns';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
@@ -11,6 +12,20 @@ import {
 } from '@/lib/ai/task2do-chat';
 
 export type ViewType = 'list' | 'calendar' | 'matrix' | 'kanban' | 'habits' | 'pocket-tracker' | 'today' | 'upcoming' | 'ai-chat' | 'completed-reminders';
+
+export interface CustomSchedule {
+  id: string;
+  userId: string;
+  label: string;
+  startDate: Date;
+  endDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type ActiveScheduleView =
+  | { type: 'month'; monthCursor: string }
+  | { type: 'custom'; scheduleId: string };
 
 export interface Task {
   id: string;
@@ -55,7 +70,9 @@ interface AppState {
   searchQuery: string;
   tasks: Task[];
   lists: List[];
-  cachedTaskSnapshots: Record<string, { tasks: Task[]; lists: List[]; cachedAt: string }>;
+  customSchedules: CustomSchedule[];
+  activeScheduleView: ActiveScheduleView;
+  cachedTaskSnapshots: Record<string, { tasks: Task[]; lists: List[]; customSchedules: CustomSchedule[]; cachedAt: string }>;
   user: { id: string; email: string | null; displayName: string | null } | null;
   isAuthReady: boolean;
   isAuthModalOpen: boolean;
@@ -77,6 +94,9 @@ interface AppState {
   setSearchQuery: (query: string) => void;
   setTasks: (tasks: Task[]) => void;
   setLists: (lists: List[]) => void;
+  setCustomSchedules: (customSchedules: CustomSchedule[]) => void;
+  addCustomSchedule: (customSchedule: CustomSchedule) => void;
+  setActiveScheduleView: (view: ActiveScheduleView) => void;
   hydrateCachedData: (userId: string) => boolean;
   setUser: (user: { id: string; email: string | null; displayName: string | null } | null) => void;
   setAuthReady: (ready: boolean) => void;
@@ -193,6 +213,28 @@ const normalizeOccurrenceDate = (occurrenceDate?: Date | string | null) => {
   return date ? date.toISOString() : null;
 };
 
+const getDefaultMonthCursor = () => startOfMonth(new Date()).toISOString();
+
+const normalizeCustomSchedule = (
+  customSchedule: Partial<CustomSchedule> & Pick<CustomSchedule, 'id' | 'userId' | 'label'>
+): CustomSchedule => ({
+  id: customSchedule.id,
+  userId: customSchedule.userId,
+  label: customSchedule.label,
+  startDate: normalizeDate(customSchedule.startDate) ?? startOfMonth(new Date()),
+  endDate: normalizeDate(customSchedule.endDate) ?? startOfMonth(new Date()),
+  createdAt: normalizeDate(customSchedule.createdAt) ?? new Date(),
+  updatedAt: normalizeDate(customSchedule.updatedAt) ?? new Date(),
+});
+
+const sortCustomSchedules = (customSchedules: CustomSchedule[]) => (
+  [...customSchedules].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+);
+
+const normalizeCustomSchedules = (customSchedules: CustomSchedule[]) => (
+  sortCustomSchedules(customSchedules.map((customSchedule) => normalizeCustomSchedule(customSchedule)))
+);
+
 const withUserSnapshot = (state: AppState, updates: Partial<AppState>): Partial<AppState> => {
   if ('user' in updates && updates.user === null) {
     return updates;
@@ -205,6 +247,9 @@ const withUserSnapshot = (state: AppState, updates: Partial<AppState>): Partial<
 
   const nextTasks = 'tasks' in updates ? (updates.tasks as Task[]) : state.tasks;
   const nextLists = 'lists' in updates ? (updates.lists as List[]) : state.lists;
+  const nextCustomSchedules = 'customSchedules' in updates
+    ? (updates.customSchedules as CustomSchedule[])
+    : state.customSchedules;
 
   return {
     ...updates,
@@ -213,6 +258,7 @@ const withUserSnapshot = (state: AppState, updates: Partial<AppState>): Partial<
       [userId]: {
         tasks: normalizeTasks(nextTasks),
         lists: normalizeLists(nextLists),
+        customSchedules: normalizeCustomSchedules(nextCustomSchedules),
         cachedAt: new Date().toISOString(),
       },
     },
@@ -233,6 +279,8 @@ export const useStore = create<AppState>()(
       searchQuery: '',
       tasks: [],
       lists: [],
+      customSchedules: [],
+      activeScheduleView: { type: 'month', monthCursor: getDefaultMonthCursor() },
       cachedTaskSnapshots: {},
       user: null,
       isAuthReady: false,
@@ -263,6 +311,13 @@ export const useStore = create<AppState>()(
       setSearchQuery: (query) => set({ searchQuery: query }),
       setTasks: (tasks) => set((state) => withUserSnapshot(state, { tasks: normalizeTasks(tasks) })),
       setLists: (lists) => set((state) => withUserSnapshot(state, { lists: normalizeLists(lists) })),
+      setCustomSchedules: (customSchedules) => set((state) => withUserSnapshot(state, {
+        customSchedules: normalizeCustomSchedules(customSchedules),
+      })),
+      addCustomSchedule: (customSchedule) => set((state) => withUserSnapshot(state, {
+        customSchedules: normalizeCustomSchedules([...state.customSchedules, normalizeCustomSchedule(customSchedule)]),
+      })),
+      setActiveScheduleView: (view) => set({ activeScheduleView: view }),
       hydrateCachedData: (userId) => {
         const snapshot = get().cachedTaskSnapshots[userId];
         if (!snapshot) {
@@ -272,6 +327,7 @@ export const useStore = create<AppState>()(
         set((state) => withUserSnapshot(state, {
           tasks: normalizeTasks(snapshot.tasks),
           lists: normalizeLists(snapshot.lists),
+          customSchedules: normalizeCustomSchedules(snapshot.customSchedules ?? []),
         }));
         return true;
       },
@@ -281,6 +337,8 @@ export const useStore = create<AppState>()(
             user: null,
             tasks: [],
             lists: [],
+            customSchedules: [],
+            activeScheduleView: { type: 'month', monthCursor: getDefaultMonthCursor() },
             selectedTaskId: null,
             selectedTaskOccurrenceDate: null,
             isRightPaneOpen: false,
@@ -292,6 +350,8 @@ export const useStore = create<AppState>()(
             user,
             tasks: [],
             lists: [],
+            customSchedules: [],
+            activeScheduleView: { type: 'month', monthCursor: getDefaultMonthCursor() },
             selectedTaskId: null,
             selectedTaskOccurrenceDate: null,
             isRightPaneOpen: false,

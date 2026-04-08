@@ -2,28 +2,46 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, Task } from '@/store/useStore';
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  eachDayOfInterval, 
-  isSameMonth, 
-  addMonths, 
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameMonth,
+  addMonths,
   subMonths,
   addDays,
   differenceInCalendarDays,
   isToday,
   startOfDay,
-  endOfDay
+  endOfDay,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Calendar as CalendarIcon, Tag, ChevronDown, Flag, LayoutDashboard, AlignLeft, Repeat, Search, Download, CalendarRange, X } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  CheckCircle2,
+  Calendar as CalendarIcon,
+  Tag,
+  ChevronDown,
+  Flag,
+  LayoutDashboard,
+  AlignLeft,
+  Repeat,
+  Search,
+  Download,
+  CalendarRange,
+  X,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { createTask, updateTask } from '@/actions/task';
+import { createCustomSchedule } from '@/actions/custom-schedule';
 import { getClientErrorMessage, unwrapDatabaseResult } from '@/lib/database-client';
 import { buildTaskCompletionUpdate, getTaskOccurrences } from '@/lib/recurrence';
+import { exportScheduleGridToPdf } from '@/lib/export-schedule-pdf';
 
 type CalendarDayItem = {
   task: Task;
@@ -32,9 +50,10 @@ type CalendarDayItem = {
   isCompleted: boolean;
 };
 
-type CalendarRangeMode = 'month' | 'custom';
+type CustomScheduleBuilderMode = 'month' | 'custom';
 
 const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_VIEW_VALUE = '__month__';
 
 const toDateInputValue = (value: Date) => format(value, 'yyyy-MM-dd');
 
@@ -51,6 +70,17 @@ const parseDateInput = (value: string, endOfSelectedDay = false) => {
   return endOfSelectedDay ? endOfDay(nextDate) : startOfDay(nextDate);
 };
 
+const parseStoredDate = (value: string | Date | null | undefined, fallback: Date) => {
+  if (!value) {
+    return fallback;
+  }
+
+  const nextDate = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(nextDate.getTime()) ? fallback : nextDate;
+};
+
+const getDefaultMonthCursor = () => startOfMonth(new Date()).toISOString();
+
 const formatScheduleTitle = (start: Date, end: Date) => {
   if (format(start, 'yyyy-MM-dd') === format(end, 'yyyy-MM-dd')) {
     return format(start, 'MMMM d, yyyy');
@@ -63,12 +93,29 @@ const formatScheduleTitle = (start: Date, end: Date) => {
   return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
 };
 
+const buildSchedulePdfFileName = (start: Date, end: Date, isMonthView: boolean) => (
+  isMonthView
+    ? `task2do-schedule-${format(start, 'yyyy-MM')}.pdf`
+    : `task2do-schedule-${format(start, 'yyyy-MM-dd')}-to-${format(end, 'yyyy-MM-dd')}.pdf`
+);
+
 export function CalendarView() {
-  const { tasks, setSelectedTaskId, user, addTask, updateTask: updateTaskState, deleteTask } = useStore();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [calendarRangeMode, setCalendarRangeMode] = useState<CalendarRangeMode>('month');
-  const [customRangeStart, setCustomRangeStart] = useState(() => startOfDay(new Date()));
-  const [customRangeEnd, setCustomRangeEnd] = useState(() => endOfDay(addDays(new Date(), 13)));
+  const {
+    tasks,
+    customSchedules,
+    activeScheduleView,
+    setActiveScheduleView,
+    setSelectedTaskId,
+    user,
+    addTask,
+    addCustomSchedule,
+    updateTask: updateTaskState,
+    deleteTask,
+  } = useStore();
+  const [builderMode, setBuilderMode] = useState<CustomScheduleBuilderMode>('month');
+  const [draftStart, setDraftStart] = useState(() => startOfDay(new Date()));
+  const [draftEnd, setDraftEnd] = useState(() => endOfDay(addDays(new Date(), 13)));
+  const [customViewOffset, setCustomViewOffset] = useState(0);
   const [isCustomScheduleOpen, setIsCustomScheduleOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState('');
@@ -80,6 +127,7 @@ export function CalendarView() {
   const calendarCaptureRef = useRef<HTMLDivElement>(null);
   const customSchedulePanelRef = useRef<HTMLDivElement>(null);
   const customScheduleButtonRef = useRef<HTMLButtonElement>(null);
+  const lastMonthCursorRef = useRef(getDefaultMonthCursor());
 
   // Expandable details state
   const [showDetails, setShowDetails] = useState(false);
@@ -92,6 +140,122 @@ export function CalendarView() {
   const [calendarStatus, setCalendarStatus] = useState<'todo' | 'in-progress' | 'done'>('todo');
   const [calendarDescription, setCalendarDescription] = useState('');
 
+  const normalizedDraftRange = useMemo(() => {
+    const safeStart = startOfDay(draftStart);
+    const safeEnd = endOfDay(draftEnd);
+
+    if (safeStart.getTime() <= safeEnd.getTime()) {
+      return { start: safeStart, end: safeEnd };
+    }
+
+    return {
+      start: startOfDay(draftEnd),
+      end: endOfDay(draftStart),
+    };
+  }, [draftEnd, draftStart]);
+
+  const monthCursorValue = activeScheduleView.type === 'month'
+    ? activeScheduleView.monthCursor
+    : lastMonthCursorRef.current;
+
+  const activeMonthCursor = useMemo(
+    () => startOfMonth(parseStoredDate(monthCursorValue, startOfMonth(new Date()))),
+    [monthCursorValue]
+  );
+
+  const activeCustomSchedule = useMemo(() => (
+    activeScheduleView.type === 'custom'
+      ? customSchedules.find((schedule) => schedule.id === activeScheduleView.scheduleId) ?? null
+      : null
+  ), [activeScheduleView, customSchedules]);
+
+  const activeCustomBaseRange = useMemo(() => {
+    if (!activeCustomSchedule) {
+      return null;
+    }
+
+    return {
+      start: startOfDay(new Date(activeCustomSchedule.startDate)),
+      end: endOfDay(new Date(activeCustomSchedule.endDate)),
+    };
+  }, [activeCustomSchedule]);
+
+  const activeCustomRangeLength = useMemo(() => (
+    activeCustomBaseRange
+      ? Math.max(
+          differenceInCalendarDays(activeCustomBaseRange.end, activeCustomBaseRange.start) + 1,
+          1
+        )
+      : 1
+  ), [activeCustomBaseRange]);
+
+  const activeCustomVisibleRange = useMemo(() => {
+    if (!activeCustomBaseRange) {
+      return null;
+    }
+
+    const offset = customViewOffset * activeCustomRangeLength;
+    return {
+      start: startOfDay(addDays(activeCustomBaseRange.start, offset)),
+      end: endOfDay(addDays(activeCustomBaseRange.end, offset)),
+    };
+  }, [activeCustomBaseRange, activeCustomRangeLength, customViewOffset]);
+
+  const isMonthScheduleView = activeScheduleView.type === 'month' || !activeCustomVisibleRange;
+
+  const activeRangeStart = isMonthScheduleView
+    ? startOfMonth(activeMonthCursor)
+    : activeCustomVisibleRange.start;
+  const activeRangeEnd = isMonthScheduleView
+    ? endOfMonth(activeMonthCursor)
+    : activeCustomVisibleRange.end;
+  const rangeStart = startOfWeek(activeRangeStart);
+  const rangeEnd = endOfWeek(activeRangeEnd);
+
+  const calendarDays = useMemo(() => eachDayOfInterval({
+    start: rangeStart,
+    end: rangeEnd,
+  }), [rangeEnd, rangeStart]);
+
+  const scheduleTitle = isMonthScheduleView
+    ? format(activeMonthCursor, 'MMMM yyyy')
+    : formatScheduleTitle(activeRangeStart, activeRangeEnd);
+
+  const activeScheduleViewKey = activeScheduleView.type === 'month'
+    ? activeScheduleView.monthCursor
+    : activeScheduleView.scheduleId;
+  const activeScheduleSwitcherValue = activeScheduleView.type === 'custom'
+    ? activeScheduleView.scheduleId
+    : MONTH_VIEW_VALUE;
+
+  const resetDetails = () => {
+    setShowDetails(false);
+    setCalendarPriority(0);
+    setCalendarQuadrant(null);
+    setCalendarRecurrence('none');
+    setCalendarRecurrenceDays([]);
+    setCalendarCustomTimes({});
+    setShowCustomTimes(false);
+    setCalendarStatus('todo');
+    setCalendarDescription('');
+  };
+
+  const activateMonthView = useCallback((nextMonth = parseStoredDate(lastMonthCursorRef.current, new Date())) => {
+    const monthCursor = startOfMonth(nextMonth).toISOString();
+    lastMonthCursorRef.current = monthCursor;
+    setCustomViewOffset(0);
+    setActiveScheduleView({
+      type: 'month',
+      monthCursor,
+    });
+  }, [setActiveScheduleView]);
+
+  const seedBuilderFromActiveView = useCallback(() => {
+    setBuilderMode(isMonthScheduleView ? 'month' : 'custom');
+    setDraftStart(startOfDay(activeRangeStart));
+    setDraftEnd(endOfDay(activeRangeEnd));
+  }, [activeRangeEnd, activeRangeStart, isMonthScheduleView]);
+
   useEffect(() => {
     if (!isSearchOpen) {
       return;
@@ -99,6 +263,12 @@ export function CalendarView() {
 
     searchInputRef.current?.focus();
   }, [isSearchOpen]);
+
+  useEffect(() => {
+    if (activeScheduleView.type === 'month') {
+      lastMonthCursorRef.current = activeScheduleView.monthCursor;
+    }
+  }, [activeScheduleView]);
 
   useEffect(() => {
     if (!isCustomScheduleOpen) {
@@ -121,26 +291,25 @@ export function CalendarView() {
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [isCustomScheduleOpen]);
 
-  const resetDetails = () => {
-    setShowDetails(false);
-    setCalendarPriority(0);
-    setCalendarQuadrant(null);
-    setCalendarRecurrence('none');
-    setCalendarRecurrenceDays([]);
-    setCalendarCustomTimes({});
-    setShowCustomTimes(false);
-    setCalendarStatus('todo');
-    setCalendarDescription('');
-  };
+  useEffect(() => {
+    if (activeScheduleView.type === 'custom' && !activeCustomSchedule && customSchedules.length > 0) {
+      activateMonthView();
+    }
+  }, [activateMonthView, activeCustomSchedule, activeScheduleView.type, customSchedules.length]);
+
+  useEffect(() => {
+    setSelectedDate(null);
+    resetDetails();
+  }, [activeScheduleView.type, activeScheduleViewKey, customViewOffset]);
 
   const handleAddTask = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskTitle.trim() && user && selectedDate) {
       const title = newTaskTitle.trim();
       setNewTaskTitle('');
-      
+
       const recurrenceValue = showDetails ? (
-        calendarRecurrence === 'weekly' && calendarRecurrenceDays.length > 0 
-          ? `weekly:${calendarRecurrenceDays.join(',')}` 
+        calendarRecurrence === 'weekly' && calendarRecurrenceDays.length > 0
+          ? `weekly:${calendarRecurrenceDays.join(',')}`
           : calendarRecurrence === 'custom'
             ? `custom:${JSON.stringify({ days: calendarRecurrenceDays, times: showCustomTimes ? calendarCustomTimes : {} })}`
             : calendarRecurrence === 'none' ? null : calendarRecurrence
@@ -264,67 +433,66 @@ export function CalendarView() {
     }
   };
 
-  const normalizedCustomRange = useMemo(() => {
-    const safeStart = startOfDay(customRangeStart);
-    const safeEnd = endOfDay(customRangeEnd);
-
-    if (safeStart.getTime() <= safeEnd.getTime()) {
-      return { start: safeStart, end: safeEnd };
-    }
-
-    return {
-      start: startOfDay(customRangeEnd),
-      end: endOfDay(customRangeStart),
-    };
-  }, [customRangeEnd, customRangeStart]);
-
-  const activeRangeStart = calendarRangeMode === 'month'
-    ? startOfMonth(currentMonth)
-    : normalizedCustomRange.start;
-  const activeRangeEnd = calendarRangeMode === 'month'
-    ? endOfMonth(activeRangeStart)
-    : normalizedCustomRange.end;
-  const rangeStart = startOfWeek(activeRangeStart);
-  const rangeEnd = endOfWeek(activeRangeEnd);
-
-  const calendarDays = useMemo(() => eachDayOfInterval({
-    start: rangeStart,
-    end: rangeEnd,
-  }), [rangeEnd, rangeStart]);
-
-  const customRangeLength = Math.max(
-    differenceInCalendarDays(normalizedCustomRange.end, normalizedCustomRange.start) + 1,
-    1
-  );
-
-  const scheduleTitle = calendarRangeMode === 'month'
-    ? format(currentMonth, 'MMMM yyyy')
-    : formatScheduleTitle(normalizedCustomRange.start, normalizedCustomRange.end);
-
   const shiftVisibleRange = (direction: 'previous' | 'next') => {
     const step = direction === 'next' ? 1 : -1;
 
-    if (calendarRangeMode === 'month') {
-      setCurrentMonth((current) => (
-        direction === 'next' ? addMonths(current, 1) : subMonths(current, 1)
-      ));
+    if (isMonthScheduleView) {
+      const nextMonth = direction === 'next'
+        ? addMonths(activeMonthCursor, 1)
+        : subMonths(activeMonthCursor, 1);
+      activateMonthView(nextMonth);
       return;
     }
 
-    setCustomRangeStart((current) => startOfDay(addDays(current, customRangeLength * step)));
-    setCustomRangeEnd((current) => endOfDay(addDays(current, customRangeLength * step)));
+    setCustomViewOffset((current) => current + step);
   };
 
   const resetVisibleRange = () => {
-    if (calendarRangeMode === 'month') {
-      setCurrentMonth(new Date());
+    if (isMonthScheduleView) {
+      activateMonthView(startOfMonth(new Date()));
       return;
     }
 
-    const today = new Date();
-    setCustomRangeStart(startOfDay(today));
-    setCustomRangeEnd(endOfDay(addDays(today, customRangeLength - 1)));
+    setCustomViewOffset(0);
   };
+
+  const handleCreateScheduleView = useCallback(async () => {
+    if (builderMode === 'month') {
+      activateMonthView(startOfMonth(normalizedDraftRange.start));
+      setIsCustomScheduleOpen(false);
+      return;
+    }
+
+    if (!user) {
+      alert('Sign in to save custom schedules.');
+      return;
+    }
+
+    try {
+      const schedule = unwrapDatabaseResult(await createCustomSchedule({
+        userId: user.id,
+        label: formatScheduleTitle(normalizedDraftRange.start, normalizedDraftRange.end),
+        startDate: normalizedDraftRange.start,
+        endDate: normalizedDraftRange.end,
+      }));
+
+      addCustomSchedule(schedule);
+      setCustomViewOffset(0);
+      setActiveScheduleView({ type: 'custom', scheduleId: schedule.id });
+      setIsCustomScheduleOpen(false);
+    } catch (error) {
+      console.error('Failed to create custom schedule', error);
+      alert(getClientErrorMessage(error, 'Unable to create the custom schedule right now.'));
+    }
+  }, [
+    activateMonthView,
+    addCustomSchedule,
+    builderMode,
+    normalizedDraftRange.end,
+    normalizedDraftRange.start,
+    setActiveScheduleView,
+    user,
+  ]);
 
   const handleDownloadPdf = useCallback(async () => {
     if (!calendarCaptureRef.current) {
@@ -334,48 +502,18 @@ export function CalendarView() {
     setIsExportingPdf(true);
 
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ]);
-
-      const canvas = await html2canvas(calendarCaptureRef.current, {
-        backgroundColor: '#ffffff',
-        scale: Math.max(window.devicePixelRatio, 2),
-        useCORS: true,
-        logging: false,
+      await exportScheduleGridToPdf(calendarCaptureRef.current, {
+        title: `Task2Do Schedule - ${scheduleTitle}`,
+        fileName: buildSchedulePdfFileName(activeRangeStart, activeRangeEnd, isMonthScheduleView),
+        orientationPreference: 'landscape',
       });
-
-      const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height],
-        compress: true,
-      });
-
-      pdf.addImage(
-        canvas.toDataURL('image/png', 1),
-        'PNG',
-        0,
-        0,
-        canvas.width,
-        canvas.height,
-        undefined,
-        'FAST'
-      );
-
-      const filename = calendarRangeMode === 'month'
-        ? `task2do-schedule-${format(currentMonth, 'yyyy-MM')}.pdf`
-        : `task2do-schedule-${format(normalizedCustomRange.start, 'yyyy-MM-dd')}-to-${format(normalizedCustomRange.end, 'yyyy-MM-dd')}.pdf`;
-
-      pdf.save(filename);
     } catch (error) {
       console.error('Failed to export schedule as PDF', error);
       alert('Unable to download the schedule PDF right now.');
     } finally {
       setIsExportingPdf(false);
     }
-  }, [calendarRangeMode, currentMonth, normalizedCustomRange.end, normalizedCustomRange.start]);
+  }, [activeRangeEnd, activeRangeStart, isMonthScheduleView, scheduleTitle]);
 
   const selectedDayTasks = useMemo(() => {
     if (!selectedDate) {
@@ -398,21 +536,50 @@ export function CalendarView() {
   }, [doesTaskMatchScheduleSearch, getDayTaskItems, normalizedScheduleSearch, selectedDate]);
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-3xl border border-outline-variant/10 shadow-sm overflow-hidden">
-      {/* Calendar Header */}
+    <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-outline-variant/10 bg-white shadow-sm">
       <div className="relative border-b border-outline-variant/10 bg-white/60 backdrop-blur-md">
         <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 lg:gap-8">
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-headline font-medium tracking-tight text-primary italic">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-5 lg:gap-6">
+              <h2 className="text-2xl font-headline font-medium italic tracking-tight text-primary sm:text-3xl lg:text-4xl">
                 {scheduleTitle}
               </h2>
+
+              <div className="relative flex items-center rounded-full border border-primary/10 bg-white px-3 py-2 shadow-sm">
+                <span className="pr-2 text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/45">
+                  View
+                </span>
+                <select
+                  value={isMonthScheduleView ? MONTH_VIEW_VALUE : activeScheduleSwitcherValue}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+
+                    if (nextValue === MONTH_VIEW_VALUE) {
+                      activateMonthView(activeMonthCursor);
+                      return;
+                    }
+
+                    setCustomViewOffset(0);
+                    setActiveScheduleView({ type: 'custom', scheduleId: nextValue });
+                  }}
+                  className="appearance-none bg-transparent pr-6 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80 outline-none"
+                >
+                  <option value={MONTH_VIEW_VALUE}>Month View</option>
+                  {customSchedules.map((schedule) => (
+                    <option key={schedule.id} value={schedule.id}>
+                      {schedule.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-outline/45" />
+              </div>
+
               <div className="flex items-center gap-1 rounded-full border border-primary/10 bg-primary/5 p-1">
                 <button
                   onClick={() => shiftVisibleRange('previous')}
                   className="touch-target flex items-center justify-center rounded-full p-2 text-primary/60 transition-colors hover:bg-primary/10 hover:text-primary"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronLeft className="h-5 w-5" />
                 </button>
                 <button
                   onClick={resetVisibleRange}
@@ -424,7 +591,7 @@ export function CalendarView() {
                   onClick={() => shiftVisibleRange('next')}
                   className="touch-target flex items-center justify-center rounded-full p-2 text-primary/60 transition-colors hover:bg-primary/10 hover:text-primary"
                 >
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronRight className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -432,7 +599,15 @@ export function CalendarView() {
             <div className="flex w-full flex-wrap items-center justify-end gap-2 xl:w-auto">
               <button
                 ref={customScheduleButtonRef}
-                onClick={() => setIsCustomScheduleOpen((open) => !open)}
+                onClick={() => {
+                  if (isCustomScheduleOpen) {
+                    setIsCustomScheduleOpen(false);
+                    return;
+                  }
+
+                  seedBuilderFromActiveView();
+                  setIsCustomScheduleOpen(true);
+                }}
                 className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-3.5 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/80 shadow-sm transition-all duration-200 hover:border-primary/20 hover:bg-primary/10"
               >
                 <CalendarRange className="h-3.5 w-3.5" />
@@ -505,14 +680,23 @@ export function CalendarView() {
             </div>
           </div>
 
-          {calendarRangeMode === 'custom' && (
+          {!isMonthScheduleView && activeCustomSchedule && (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-primary/[0.03] px-4 py-2.5">
               <div>
-                <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Custom Range Active</p>
-                <p className="mt-1 text-sm font-body font-medium text-primary">{formatScheduleTitle(normalizedCustomRange.start, normalizedCustomRange.end)}</p>
+                <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">
+                  Saved Custom Schedule
+                </p>
+                <p className="mt-1 text-sm font-body font-medium text-primary">
+                  {activeCustomSchedule.label}
+                </p>
+                {customViewOffset !== 0 && (
+                  <p className="mt-1 text-[10px] font-body text-outline/60">
+                    Viewing shifted window: {formatScheduleTitle(activeRangeStart, activeRangeEnd)}
+                  </p>
+                )}
               </div>
               <button
-                onClick={() => setCalendarRangeMode('month')}
+                onClick={() => activateMonthView(startOfMonth(activeRangeStart))}
                 className="rounded-full border border-primary/10 bg-white px-3 py-2 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-primary/70 transition-all hover:border-primary/20 hover:bg-primary/5"
               >
                 Use Month View
@@ -529,13 +713,17 @@ export function CalendarView() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
               transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-              className="absolute left-4 right-4 top-full z-30 mt-3 sm:left-auto sm:right-6 sm:w-[26rem] lg:right-10"
+              className="absolute left-4 right-4 top-full z-30 mt-3 sm:left-auto sm:right-6 sm:w-[27rem] lg:right-10"
             >
               <div className="rounded-3xl border border-outline-variant/20 bg-white/95 p-4 shadow-2xl backdrop-blur-xl">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Schedule View</p>
-                    <h3 className="mt-1 text-lg font-headline font-medium italic text-primary">Custom Schedule Builder</h3>
+                    <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">
+                      Schedule View
+                    </p>
+                    <h3 className="mt-1 text-lg font-headline font-medium italic text-primary">
+                      Custom Schedule Builder
+                    </h3>
                   </div>
                   <button
                     onClick={() => setIsCustomScheduleOpen(false)}
@@ -547,61 +735,73 @@ export function CalendarView() {
 
                 <div className="mt-4 grid grid-cols-2 gap-2 rounded-full border border-primary/10 bg-primary/5 p-1">
                   <button
-                    onClick={() => setCalendarRangeMode('month')}
+                    onClick={() => setBuilderMode('month')}
                     className={cn(
-                      "rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200",
-                      calendarRangeMode === 'month'
-                        ? "bg-white text-primary shadow-sm"
-                        : "text-outline/60 hover:text-primary"
+                      'rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200',
+                      builderMode === 'month'
+                        ? 'bg-white text-primary shadow-sm'
+                        : 'text-outline/60 hover:text-primary'
                     )}
                   >
                     Standard Month
                   </button>
                   <button
-                    onClick={() => setCalendarRangeMode('custom')}
+                    onClick={() => setBuilderMode('custom')}
                     className={cn(
-                      "rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200",
-                      calendarRangeMode === 'custom'
-                        ? "bg-white text-primary shadow-sm"
-                        : "text-outline/60 hover:text-primary"
+                      'rounded-full px-3 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200',
+                      builderMode === 'custom'
+                        ? 'bg-white text-primary shadow-sm'
+                        : 'text-outline/60 hover:text-primary'
                     )}
                   >
                     Custom Range
                   </button>
                 </div>
 
-                {calendarRangeMode === 'month' ? (
-                  <div className="mt-4 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest/40 px-4 py-3">
+                {builderMode === 'month' ? (
+                  <div className="mt-4 space-y-4 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest/40 px-4 py-3.5">
+                    <div>
+                      <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/45">
+                        Month Target
+                      </p>
+                      <p className="mt-1 text-sm font-body font-medium text-primary">
+                        {format(startOfMonth(normalizedDraftRange.start), 'MMMM yyyy')}
+                      </p>
+                    </div>
                     <p className="text-[10px] font-body leading-relaxed text-outline/70">
-                      Stay in a clean month view, or switch to a non-standard date window for sprint planning, travel blocks, or launch weeks.
+                      Reopen the polished full-month schedule without saving a custom range.
                     </p>
                   </div>
                 ) : (
-                    <div className="mt-4 space-y-3">
+                  <div className="mt-4 space-y-3.5">
                     <div className="grid gap-2.5 sm:grid-cols-2">
                       <label className="space-y-2">
-                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">Start Date</span>
+                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">
+                          Start Date
+                        </span>
                         <input
                           type="date"
-                          value={toDateInputValue(normalizedCustomRange.start)}
+                          value={toDateInputValue(normalizedDraftRange.start)}
                           onChange={(event) => {
                             const nextDate = parseDateInput(event.target.value);
                             if (nextDate) {
-                              setCustomRangeStart(nextDate);
+                              setDraftStart(nextDate);
                             }
                           }}
                           className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-2.5 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
                         />
                       </label>
                       <label className="space-y-2">
-                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">End Date</span>
+                        <span className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/50">
+                          End Date
+                        </span>
                         <input
                           type="date"
-                          value={toDateInputValue(normalizedCustomRange.end)}
+                          value={toDateInputValue(normalizedDraftRange.end)}
                           onChange={(event) => {
                             const nextDate = parseDateInput(event.target.value, true);
                             if (nextDate) {
-                              setCustomRangeEnd(nextDate);
+                              setDraftEnd(nextDate);
                             }
                           }}
                           className="w-full rounded-2xl border border-outline-variant/15 bg-white px-4 py-2.5 text-sm font-body text-primary outline-none transition-all focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
@@ -618,10 +818,10 @@ export function CalendarView() {
                         <button
                           key={preset.label}
                           onClick={() => {
-                            const today = new Date();
-                            setCalendarRangeMode('custom');
-                            setCustomRangeStart(startOfDay(today));
-                            setCustomRangeEnd(endOfDay(addDays(today, preset.days)));
+                            const baseStart = startOfDay(normalizedDraftRange.start);
+                            setBuilderMode('custom');
+                            setDraftStart(baseStart);
+                            setDraftEnd(endOfDay(addDays(baseStart, preset.days)));
                           }}
                           className="rounded-full border border-primary/10 bg-primary/5 px-3 py-2 text-[9px] font-label font-bold uppercase tracking-[0.16em] text-primary/75 transition-all duration-200 hover:border-primary/20 hover:bg-primary/10"
                         >
@@ -630,11 +830,30 @@ export function CalendarView() {
                       ))}
                     </div>
 
+                    <div className="rounded-2xl border border-primary/10 bg-primary/[0.03] px-4 py-3">
+                      <p className="text-[8px] font-label font-bold uppercase tracking-[0.22em] text-outline/45">
+                        Saved Label Preview
+                      </p>
+                      <p className="mt-1 text-sm font-body font-medium text-primary">
+                        {formatScheduleTitle(normalizedDraftRange.start, normalizedDraftRange.end)}
+                      </p>
+                    </div>
+
                     <p className="text-[10px] font-body leading-relaxed text-outline/65">
-                      The grid stays padded to full weeks, so the calendar remains easy to scan while only your chosen range gets emphasis.
+                      The grid stays padded to full weeks so scanning remains effortless, while the saved schedule keeps its own isolated range and export state.
                     </p>
                   </div>
                 )}
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    onClick={handleCreateScheduleView}
+                    className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.16em] text-on-primary shadow-sm transition-all duration-200 hover:shadow-md"
+                  >
+                    <CalendarRange className="h-3.5 w-3.5" />
+                    Create
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
@@ -643,7 +862,6 @@ export function CalendarView() {
 
       <div className="min-h-0 flex-1 overflow-x-auto">
         <div ref={calendarCaptureRef} className="flex min-h-full min-w-[44rem] flex-col bg-white md:min-w-0">
-          {/* Weekdays Header */}
           <div className="grid grid-cols-7 border-b border-outline-variant/10 bg-white">
             {weekDays.map((day) => (
               <div key={day} className="py-4 text-center text-[9px] font-label font-bold uppercase tracking-[0.3em] text-outline/40 sm:py-5">
@@ -652,53 +870,52 @@ export function CalendarView() {
             ))}
           </div>
 
-          {/* Calendar Grid */}
           <div className="hide-scrollbar grid flex-1 grid-cols-7 auto-rows-fr overflow-y-auto bg-white">
             {calendarDays.map((day, idx) => {
-            const dayTasks = getDayTaskItems(day);
-            const dayLabelMatches = normalizedScheduleSearch
-              ? format(day, 'MMMM d EEEE').toLowerCase().includes(normalizedScheduleSearch)
-              : false;
-            const matchedDayTasks = normalizedScheduleSearch
-              ? dayTasks.filter(doesTaskMatchScheduleSearch)
-              : dayTasks;
-            const visibleDayTasks = normalizedScheduleSearch
-              ? matchedDayTasks.length > 0
-                ? matchedDayTasks.slice(0, 3)
-                : dayLabelMatches
-                  ? dayTasks.slice(0, 3)
-                  : []
-              : dayTasks.slice(0, 3);
-            const matchingCount = normalizedScheduleSearch
-              ? matchedDayTasks.length > 0
-                ? matchedDayTasks.length
-                : dayLabelMatches
-                  ? dayTasks.length
-                  : 0
-              : dayTasks.length;
-            const isInPrimaryRange = calendarRangeMode === 'month'
-              ? isSameMonth(day, activeRangeStart)
-              : day >= startOfDay(normalizedCustomRange.start) && day <= startOfDay(normalizedCustomRange.end);
-            const isCurrentDay = isToday(day);
-            const isSearchMatch = doesDayMatchScheduleSearch(day, dayTasks);
+              const dayTasks = getDayTaskItems(day);
+              const dayLabelMatches = normalizedScheduleSearch
+                ? format(day, 'MMMM d EEEE').toLowerCase().includes(normalizedScheduleSearch)
+                : false;
+              const matchedDayTasks = normalizedScheduleSearch
+                ? dayTasks.filter(doesTaskMatchScheduleSearch)
+                : dayTasks;
+              const visibleDayTasks = normalizedScheduleSearch
+                ? matchedDayTasks.length > 0
+                  ? matchedDayTasks.slice(0, 3)
+                  : dayLabelMatches
+                    ? dayTasks.slice(0, 3)
+                    : []
+                : dayTasks.slice(0, 3);
+              const matchingCount = normalizedScheduleSearch
+                ? matchedDayTasks.length > 0
+                  ? matchedDayTasks.length
+                  : dayLabelMatches
+                    ? dayTasks.length
+                    : 0
+                : dayTasks.length;
+              const isInPrimaryRange = isMonthScheduleView
+                ? isSameMonth(day, activeRangeStart)
+                : day >= startOfDay(activeRangeStart) && day <= startOfDay(activeRangeEnd);
+              const isCurrentDay = isToday(day);
+              const isSearchMatch = doesDayMatchScheduleSearch(day, dayTasks);
 
               return (
                 <div
                   key={day.toISOString()}
                   onClick={() => { setSelectedDate(day); resetDetails(); setNewTaskTitle(''); }}
                   className={cn(
-                    "grid min-h-[5.75rem] cursor-pointer grid-rows-[auto_minmax(0,1fr)] gap-1 border-b border-r border-outline-variant/10 p-2 transition-all hover:bg-primary/[0.02] sm:min-h-[8rem] sm:p-2.5 lg:min-h-[13.5rem] lg:p-3.5 lg:gap-2.5",
-                    !isInPrimaryRange && "bg-primary/[0.01] opacity-35",
-                    normalizedScheduleSearch && !isSearchMatch && "opacity-45",
-                    normalizedScheduleSearch && isSearchMatch && "bg-primary/[0.04] shadow-[inset_0_0_0_1px_rgba(16,24,40,0.06)]",
-                    idx % 7 === 6 && "border-r-0"
+                    'grid min-h-[5.75rem] cursor-pointer grid-rows-[auto_minmax(0,1fr)] gap-1 border-b border-r border-outline-variant/10 p-2 transition-all hover:bg-primary/[0.02] sm:min-h-[8rem] sm:p-2.5 lg:min-h-[13.5rem] lg:gap-2.5 lg:p-3.5',
+                    !isInPrimaryRange && 'bg-primary/[0.01] opacity-35',
+                    normalizedScheduleSearch && !isSearchMatch && 'opacity-45',
+                    normalizedScheduleSearch && isSearchMatch && 'bg-primary/[0.04] shadow-[inset_0_0_0_1px_rgba(16,24,40,0.06)]',
+                    idx % 7 === 6 && 'border-r-0'
                   )}
                 >
                   <div className="flex items-center justify-between">
                     <span className={cn(
-                      "flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-body font-bold transition-all sm:h-8 sm:w-8 sm:text-[12px]",
-                      isCurrentDay ? "bg-primary text-on-primary shadow-md" : "text-primary/60",
-                      normalizedScheduleSearch && isSearchMatch && !isCurrentDay && "bg-primary/10 text-primary"
+                      'flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-body font-bold transition-all sm:h-8 sm:w-8 sm:text-[12px]',
+                      isCurrentDay ? 'bg-primary text-on-primary shadow-md' : 'text-primary/60',
+                      normalizedScheduleSearch && isSearchMatch && !isCurrentDay && 'bg-primary/10 text-primary'
                     )}>
                       {format(day, 'd')}
                     </span>
@@ -713,8 +930,8 @@ export function CalendarView() {
                           <div
                             key={`${item.task.id}-${item.occurrenceKey}`}
                             className={cn(
-                              "h-1.5 w-1.5 rounded-full",
-                              normalizedScheduleSearch ? "bg-primary" : "bg-primary/50"
+                              'h-1.5 w-1.5 rounded-full',
+                              normalizedScheduleSearch ? 'bg-primary' : 'bg-primary/50'
                             )}
                           />
                         ))}
@@ -732,11 +949,11 @@ export function CalendarView() {
                           setSelectedTaskId(item.task.id, item.occurrenceDate);
                         }}
                         className={cn(
-                          "flex min-h-0 items-center overflow-hidden rounded-lg border px-2.5 py-1.5 text-[10px] font-body font-medium leading-[1.15] transition-all hover:shadow-sm",
+                          'flex min-h-0 items-center overflow-hidden rounded-lg border px-2.5 py-1.5 text-[10px] font-body font-medium leading-[1.15] transition-all hover:shadow-sm',
                           item.isCompleted
-                            ? "border-transparent bg-primary/5 text-outline/60 line-through"
-                            : "border-primary/10 bg-primary/5 text-primary hover:border-primary/30",
-                          normalizedScheduleSearch && doesTaskMatchScheduleSearch(item) && "border-primary/25 bg-white shadow-sm"
+                            ? 'border-transparent bg-primary/5 text-outline/60 line-through'
+                            : 'border-primary/10 bg-primary/5 text-primary hover:border-primary/30',
+                          normalizedScheduleSearch && doesTaskMatchScheduleSearch(item) && 'border-primary/25 bg-white shadow-sm'
                         )}
                       >
                         <span className="block truncate">{item.task.title}</span>
@@ -752,74 +969,69 @@ export function CalendarView() {
 
       <AnimatePresence>
         {selectedDate && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/10 backdrop-blur-[8px]"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/10 p-0 backdrop-blur-[8px] sm:items-center sm:p-4"
             onClick={() => { setSelectedDate(null); resetDetails(); }}
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl w-full sm:max-w-2xl border border-outline-variant/20 flex flex-col max-h-[90vh] sm:max-h-[85vh]"
+              className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl border border-outline-variant/20 bg-white shadow-2xl sm:max-h-[85vh] sm:max-w-2xl sm:rounded-3xl"
             >
-              {/* Date Header & Quick Add */}
-              <div className="p-5 sm:p-8 border-b border-outline-variant/10 bg-surface/50">
-                {/* Drag handle for mobile */}
-                <div className="w-10 h-1 rounded-full bg-outline-variant/40 mx-auto mb-4 sm:hidden" />
-                <div className="flex items-end justify-between mb-6 sm:mb-8">
+              <div className="border-b border-outline-variant/10 bg-surface/50 p-5 sm:p-8">
+                <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-outline-variant/40 sm:hidden" />
+                <div className="mb-6 flex items-end justify-between sm:mb-8">
                   <div>
-                    <h2 className="font-headline font-medium text-3xl sm:text-4xl tracking-tight text-primary">
+                    <h2 className="font-headline text-3xl font-medium tracking-tight text-primary sm:text-4xl">
                       {format(selectedDate, 'd')} {format(selectedDate, 'MMM')}
                     </h2>
-                    <p className="font-label text-[9px] uppercase tracking-[0.25em] text-outline mt-2 font-bold opacity-60">
+                    <p className="mt-2 font-label text-[9px] font-bold uppercase tracking-[0.25em] text-outline opacity-60">
                       {format(selectedDate, 'EEEE')}
                     </p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => { setSelectedDate(null); resetDetails(); }}
-                    className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container hover:bg-surface-container-high transition-colors text-outline cursor-pointer touch-target"
+                    className="touch-target flex h-8 w-8 items-center justify-center rounded-full bg-surface-container text-outline transition-colors hover:bg-surface-container-high"
                   >
                     ×
                   </button>
                 </div>
 
-                {/* Customized Quick Add Bar for selected date */}
-                <div className="flex items-center gap-3 sm:gap-4 bg-white p-2 rounded-2xl border border-outline-variant/10 shadow-sm focus-within:shadow-md focus-within:border-primary/20 transition-all duration-500">
-                  <div className="ml-2 sm:ml-4 w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-primary/60" />
+                <div className="flex items-center gap-3 rounded-2xl border border-outline-variant/10 bg-white p-2 shadow-sm transition-all duration-500 focus-within:border-primary/20 focus-within:shadow-md sm:gap-4">
+                  <div className="ml-2 flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-low sm:ml-4">
+                    <Plus className="h-5 w-5 text-primary/60" />
                   </div>
-                  <input 
+                  <input
                     ref={inputRef}
                     autoFocus
-                    type="text" 
+                    type="text"
                     value={newTaskTitle}
                     onChange={(e) => setNewTaskTitle(e.target.value)}
                     onKeyDown={handleAddTask}
                     placeholder={`Capture a new objective for ${format(selectedDate, 'MMM d')}...`}
-                    className="flex-1 bg-transparent border-none focus:ring-0 py-4 font-body text-lg tracking-tight placeholder:text-outline/40 outline-none"
+                    className="flex-1 bg-transparent py-4 font-body text-lg tracking-tight placeholder:text-outline/40 outline-none"
                   />
-                  <div className="hidden sm:flex gap-4 px-6 border-l border-outline-variant/20">
-                    <CalendarIcon className="w-5 h-5 text-primary cursor-pointer transition-colors" />
-                    <Tag className="w-5 h-5 text-outline/40 cursor-pointer hover:text-primary transition-colors" />
+                  <div className="hidden gap-4 border-l border-outline-variant/20 px-6 sm:flex">
+                    <CalendarIcon className="h-5 w-5 cursor-pointer text-primary transition-colors" />
+                    <Tag className="h-5 w-5 cursor-pointer text-outline/40 transition-colors hover:text-primary" />
                   </div>
                 </div>
 
-                {/* Add Details Toggle */}
                 <button
                   onClick={() => setShowDetails(!showDetails)}
-                  className="flex items-center gap-2 mt-4 px-4 py-2 text-[10px] font-label font-bold tracking-[0.15em] uppercase text-primary/60 hover:text-primary hover:bg-primary/5 rounded-full transition-all duration-200"
+                  className="mt-4 flex items-center gap-2 rounded-full px-4 py-2 text-[10px] font-label font-bold uppercase tracking-[0.15em] text-primary/60 transition-all duration-200 hover:bg-primary/5 hover:text-primary"
                 >
-                  <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", showDetails && "rotate-180")} />
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-300', showDetails && 'rotate-180')} />
                   {showDetails ? 'Hide Details' : 'Add Details'}
                 </button>
               </div>
 
-              {/* Expandable Details Section */}
               <AnimatePresence>
                 {showDetails && (
                   <motion.div
@@ -829,18 +1041,17 @@ export function CalendarView() {
                     transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                     className="overflow-hidden border-b border-outline-variant/10"
                   >
-                    <div className="p-8 space-y-6 bg-surface-container-lowest/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[9px] font-label font-bold tracking-[0.25em] uppercase text-outline/50">Task Details</span>
-                        <div className="flex-1 h-px bg-outline-variant/20" />
+                    <div className="space-y-6 bg-surface-container-lowest/30 p-8">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-[9px] font-label font-bold uppercase tracking-[0.25em] text-outline/50">Task Details</span>
+                        <div className="h-px flex-1 bg-outline-variant/20" />
                       </div>
 
-                      {/* Priority */}
                       <div className="flex items-center gap-6 text-sm">
-                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
-                          <Flag className="w-3.5 h-3.5" /> Priority
+                        <div className="flex w-28 shrink-0 items-center gap-2.5 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/70">
+                          <Flag className="h-3.5 w-3.5" /> Priority
                         </div>
-                        <div className="flex-1 flex items-center gap-3">
+                        <div className="flex flex-1 items-center gap-3">
                           {[
                             { value: 0, label: 'None', color: 'text-outline/40' },
                             { value: 1, label: 'Low', color: 'text-blue-500' },
@@ -851,21 +1062,20 @@ export function CalendarView() {
                               key={p.value}
                               onClick={() => setCalendarPriority(p.value)}
                               className={cn(
-                                "p-2.5 rounded-full transition-all duration-200 hover:bg-surface-container-low active:scale-90",
-                                calendarPriority === p.value ? "bg-surface-container-high shadow-sm scale-110" : ""
+                                'rounded-full p-2.5 transition-all duration-200 hover:bg-surface-container-low active:scale-90',
+                                calendarPriority === p.value ? 'scale-110 bg-surface-container-high shadow-sm' : ''
                               )}
                               title={p.label}
                             >
-                              <Flag className={cn("w-4 h-4", p.color, calendarPriority === p.value ? "fill-current" : "")} />
+                              <Flag className={cn('h-4 w-4', p.color, calendarPriority === p.value ? 'fill-current' : '')} />
                             </button>
                           ))}
                         </div>
                       </div>
 
-                      {/* Repeat */}
                       <div className="flex items-center gap-6 text-sm">
-                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
-                          <Repeat className="w-3.5 h-3.5" /> Repeat
+                        <div className="flex w-28 shrink-0 items-center gap-2.5 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/70">
+                          <Repeat className="h-3.5 w-3.5" /> Repeat
                         </div>
                         <div className="flex-1 space-y-3 pt-2">
                           <select
@@ -878,7 +1088,7 @@ export function CalendarView() {
                                 setShowCustomTimes(false);
                               }
                             }}
-                            className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+                            className="rounded-lg border-none bg-surface-container-low px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200 hover:bg-surface-container-high focus:outline-none focus:ring-1 focus:ring-primary/20"
                           >
                             <option value="none">None</option>
                             <option value="daily">Daily</option>
@@ -886,7 +1096,7 @@ export function CalendarView() {
                             <option value="monthly">Monthly</option>
                             <option value="custom">Custom...</option>
                           </select>
-                          
+
                           {(calendarRecurrence === 'weekly' || calendarRecurrence === 'custom') && (
                             <div className="space-y-4 pt-2">
                               <div className="flex gap-2">
@@ -896,9 +1106,8 @@ export function CalendarView() {
                                     <button
                                       key={idx}
                                       onClick={() => {
-                                        setCalendarRecurrenceDays(prev => {
-                                          const newDays = prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx];
-                                          // If deselecting a day, also clear its custom time
+                                        setCalendarRecurrenceDays((prev) => {
+                                          const newDays = prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx];
                                           if (prev.includes(idx)) {
                                             const newTimes = { ...calendarCustomTimes };
                                             delete newTimes[idx];
@@ -908,10 +1117,10 @@ export function CalendarView() {
                                         });
                                       }}
                                       className={cn(
-                                        "w-7 h-7 rounded-full text-[10px] font-bold transition-all",
-                                        isSelected 
-                                          ? "bg-primary text-on-primary shadow-sm" 
-                                          : "bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary"
+                                        'h-7 w-7 rounded-full text-[10px] font-bold transition-all',
+                                        isSelected
+                                          ? 'bg-primary text-on-primary shadow-sm'
+                                          : 'bg-surface-container-low text-outline/60 hover:bg-surface-container-high hover:text-primary'
                                       )}
                                     >
                                       {day}
@@ -924,24 +1133,24 @@ export function CalendarView() {
                                 <div className="space-y-3 pt-2">
                                   <button
                                     onClick={() => setShowCustomTimes(!showCustomTimes)}
-                                    className="text-[9px] font-label font-bold tracking-[0.2em] uppercase text-primary/70 hover:text-primary flex items-center gap-2"
+                                    className="flex items-center gap-2 text-[9px] font-label font-bold uppercase tracking-[0.2em] text-primary/70 hover:text-primary"
                                   >
-                                    <Plus className={cn("w-3 h-3 transition-transform", showCustomTimes && "rotate-45")} />
-                                    {showCustomTimes ? "Hide custom times" : "Add custom time also"}
+                                    <Plus className={cn('h-3 w-3 transition-transform', showCustomTimes && 'rotate-45')} />
+                                    {showCustomTimes ? 'Hide custom times' : 'Add custom time also'}
                                   </button>
 
                                   {showCustomTimes && (
-                                    <div className="space-y-3 bg-primary/5 p-4 rounded-xl border border-primary/10">
-                                      {calendarRecurrenceDays.sort().map(dayIdx => (
+                                    <div className="space-y-3 rounded-xl border border-primary/10 bg-primary/5 p-4">
+                                      {calendarRecurrenceDays.sort().map((dayIdx) => (
                                         <div key={dayIdx} className="flex items-center justify-between gap-4">
-                                          <span className="text-[10px] font-label font-bold uppercase tracking-wider text-outline/70 w-16">
+                                          <span className="w-16 text-[10px] font-label font-bold uppercase tracking-wider text-outline/70">
                                             {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIdx]}
                                           </span>
-                                          <input 
-                                            type="time" 
-                                            value={calendarCustomTimes[dayIdx] || "09:00"}
-                                            onChange={(e) => setCalendarCustomTimes(prev => ({ ...prev, [dayIdx]: e.target.value }))}
-                                            className="bg-white border border-outline-variant/20 rounded-lg px-2 py-1 text-xs font-body focus:ring-1 focus:ring-primary/20 outline-none"
+                                          <input
+                                            type="time"
+                                            value={calendarCustomTimes[dayIdx] || '09:00'}
+                                            onChange={(e) => setCalendarCustomTimes((prev) => ({ ...prev, [dayIdx]: e.target.value }))}
+                                            className="rounded-lg border border-outline-variant/20 bg-white px-2 py-1 text-xs font-body outline-none focus:ring-1 focus:ring-primary/20"
                                           />
                                         </div>
                                       ))}
@@ -954,16 +1163,15 @@ export function CalendarView() {
                         </div>
                       </div>
 
-                      {/* Status */}
                       <div className="flex items-center gap-6 text-sm">
-                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Status
+                        <div className="flex w-28 shrink-0 items-center gap-2.5 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/70">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Status
                         </div>
                         <div className="flex-1">
                           <select
                             value={calendarStatus}
-                            onChange={(e) => setCalendarStatus(e.target.value as any)}
-                            className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+                            onChange={(e) => setCalendarStatus(e.target.value as typeof calendarStatus)}
+                            className="rounded-lg border-none bg-surface-container-low px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200 hover:bg-surface-container-high focus:outline-none focus:ring-1 focus:ring-primary/20"
                           >
                             <option value="todo">To Do</option>
                             <option value="in-progress">In Progress</option>
@@ -972,16 +1180,15 @@ export function CalendarView() {
                         </div>
                       </div>
 
-                      {/* Quadrant */}
                       <div className="flex items-center gap-6 text-sm">
-                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
-                          <LayoutDashboard className="w-3.5 h-3.5" /> Quadrant
+                        <div className="flex w-28 shrink-0 items-center gap-2.5 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/70">
+                          <LayoutDashboard className="h-3.5 w-3.5" /> Quadrant
                         </div>
                         <div className="flex-1">
                           <select
                             value={calendarQuadrant || 'none'}
                             onChange={(e) => setCalendarQuadrant(e.target.value === 'none' ? null : e.target.value)}
-                            className="bg-surface-container-low hover:bg-surface-container-high px-4 py-2.5 rounded-lg border-none transition-all duration-200 text-[10px] font-label font-bold tracking-[0.15em] uppercase focus:outline-none focus:ring-1 focus:ring-primary/20"
+                            className="rounded-lg border-none bg-surface-container-low px-4 py-2.5 text-[10px] font-label font-bold uppercase tracking-[0.15em] transition-all duration-200 hover:bg-surface-container-high focus:outline-none focus:ring-1 focus:ring-primary/20"
                           >
                             <option value="none">None</option>
                             <option value="urgent-important">Urgent & Important</option>
@@ -992,20 +1199,18 @@ export function CalendarView() {
                         </div>
                       </div>
 
-                      {/* Tags */}
                       <div className="flex items-center gap-6 text-sm">
-                        <div className="w-28 text-outline/70 flex items-center gap-2.5 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
-                          <Tag className="w-3.5 h-3.5" /> Tags
+                        <div className="flex w-28 shrink-0 items-center gap-2.5 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/70">
+                          <Tag className="h-3.5 w-3.5" /> Tags
                         </div>
-                        <div className="flex-1 px-4 py-2.5 hover:bg-surface-container-low rounded-lg cursor-pointer transition-all duration-200 text-outline/50 font-label font-bold text-[9px] tracking-[0.15em] uppercase">
+                        <div className="flex-1 cursor-pointer rounded-lg px-4 py-2.5 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/50 transition-all duration-200 hover:bg-surface-container-low">
                           Add identifiers...
                         </div>
                       </div>
 
-                      {/* Notes */}
                       <div className="flex items-start gap-6 text-sm">
-                        <div className="w-28 text-outline/70 flex items-center gap-2.5 pt-2 font-label font-bold text-[9px] tracking-[0.15em] uppercase shrink-0">
-                          <AlignLeft className="w-3.5 h-3.5" /> Notes
+                        <div className="flex w-28 shrink-0 items-center gap-2.5 pt-2 text-[9px] font-label font-bold uppercase tracking-[0.15em] text-outline/70">
+                          <AlignLeft className="h-3.5 w-3.5" /> Notes
                         </div>
                         <div className="flex-1">
                           <textarea
@@ -1013,7 +1218,7 @@ export function CalendarView() {
                             onChange={(e) => setCalendarDescription(e.target.value)}
                             placeholder="Add context, details, or notes..."
                             rows={3}
-                            className="w-full bg-surface-container-low/50 hover:bg-surface-container-high/50 border border-outline-variant/10 focus:border-primary/20 rounded-xl px-5 py-4 font-body text-[14px] leading-relaxed placeholder:text-outline/30 transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-primary/10 resize-none"
+                            className="w-full resize-none rounded-xl border border-outline-variant/10 bg-surface-container-low/50 px-5 py-4 font-body text-[14px] leading-relaxed placeholder:text-outline/30 transition-all duration-200 hover:bg-surface-container-high/50 focus:border-primary/20 focus:outline-none focus:ring-1 focus:ring-primary/10"
                           />
                         </div>
                       </div>
@@ -1022,7 +1227,7 @@ export function CalendarView() {
                 )}
               </AnimatePresence>
 
-              <div className="p-5 sm:p-8 overflow-y-auto space-y-3 bg-surface-container-lowest/30 safe-area-bottom">
+              <div className="safe-area-bottom space-y-3 overflow-y-auto bg-surface-container-lowest/30 p-5 sm:p-8">
                 {normalizedScheduleSearch && selectedDayTasks.length > 0 && (
                   <div className="rounded-2xl border border-primary/10 bg-white/80 px-4 py-3">
                     <p className="text-[8px] font-label font-bold uppercase tracking-[0.2em] text-outline/50">Search Results</p>
@@ -1033,13 +1238,13 @@ export function CalendarView() {
                 )}
 
                 {selectedDayTasks.length === 0 ? (
-                  <div className="text-center py-16 text-outline flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center">
-                      <CheckCircle2 className="w-6 h-6 text-outline/40" />
+                  <div className="flex flex-col items-center gap-4 py-16 text-center text-outline">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-container">
+                      <CheckCircle2 className="h-6 w-6 text-outline/40" />
                     </div>
                     <div>
                       <p className="text-xl font-headline italic text-primary">Clear Schedule</p>
-                      <p className="text-[9px] font-label uppercase tracking-[0.25em] mt-2 font-bold opacity-60">
+                      <p className="mt-2 text-[9px] font-label font-bold uppercase tracking-[0.25em] opacity-60">
                         {normalizedScheduleSearch
                           ? 'No matching objectives for this search'
                           : 'No objectives logged for this exact date'}
@@ -1048,7 +1253,7 @@ export function CalendarView() {
                   </div>
                 ) : (
                   selectedDayTasks.map((item) => (
-                    <div 
+                    <div
                       key={`${item.task.id}-${item.occurrenceKey}`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1056,27 +1261,27 @@ export function CalendarView() {
                         setSelectedDate(null);
                       }}
                       className={cn(
-                        "group flex items-center justify-between p-5 bg-white rounded-xl transition-all cursor-pointer border border-outline-variant/10 hover:border-primary/20 hover:shadow-md",
-                        item.isCompleted && "opacity-60 grayscale-[0.5]"
+                        'group flex cursor-pointer items-center justify-between rounded-xl border border-outline-variant/10 bg-white p-5 transition-all hover:border-primary/20 hover:shadow-md',
+                        item.isCompleted && 'opacity-60 grayscale-[0.5]'
                       )}
                     >
                       <div className="flex items-center gap-6">
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleToggleComplete(item);
                           }}
                           className={cn(
-                            "w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center transition-all group-hover:border-primary",
-                            item.isCompleted ? "bg-primary border-primary" : "bg-transparent"
+                            'flex h-6 w-6 items-center justify-center rounded-full border border-outline-variant transition-all group-hover:border-primary',
+                            item.isCompleted ? 'border-primary bg-primary' : 'bg-transparent'
                           )}
                         >
-                          {item.isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-on-primary" />}
+                          {item.isCompleted && <CheckCircle2 className="h-3.5 w-3.5 text-on-primary" />}
                         </button>
                         <div>
                           <p className={cn(
-                            "text-[15px] font-body transition-all",
-                            item.isCompleted ? "text-outline line-through" : "text-primary font-medium"
+                            'text-[15px] font-body transition-all',
+                            item.isCompleted ? 'text-outline line-through' : 'font-medium text-primary'
                           )}>
                             {item.task.title}
                           </p>

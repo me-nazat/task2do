@@ -116,15 +116,15 @@ export function DateTimePicker({
   const isCompact = density === 'compact';
 
   return (
-    <div className={cn('w-full max-w-full box-border', isCompact ? 'space-y-2.5' : 'space-y-6')}>
-      <div className={cn('flex flex-wrap items-center w-full max-w-full', isCompact ? 'gap-2' : 'gap-3')}>
+    <div className={cn('box-border w-full max-w-full', isCompact ? 'space-y-1.5' : 'space-y-6')}>
+      <div className={cn('flex w-full max-w-full flex-wrap items-center', isCompact ? 'gap-1.5' : 'gap-3')}>
         {/* Date Picker */}
         <Popover.Root>
           <Popover.Trigger asChild>
             <button
               className={cn(
                 'flex items-center rounded-full border border-primary/5 bg-primary/5 font-body font-medium text-primary transition-all hover:border-primary/20 hover:bg-primary/10',
-                isCompact ? 'gap-2 px-3.5 py-2 text-[12px]' : 'gap-3 px-5 py-2.5 text-[13px]'
+                isCompact ? 'gap-1.5 px-3 py-1.5 text-[11px]' : 'gap-3 px-5 py-2.5 text-[13px]'
               )}
             >
               <CalendarIcon className="w-4 h-4 text-primary/60" />
@@ -170,7 +170,7 @@ export function DateTimePicker({
             <div
               className={cn(
                 'flex items-center gap-1.5 overflow-hidden rounded-full border border-primary/5 bg-primary/5 text-primary transition-all hover:bg-primary/10',
-                isCompact ? 'px-2.5 py-1.5' : 'px-3 py-2'
+                isCompact ? 'px-2 py-1' : 'px-3 py-2'
               )}
             >
               <Clock className="w-3.5 h-3.5 text-primary/60 shrink-0" />
@@ -182,7 +182,7 @@ export function DateTimePicker({
                 }}
                 className={cn(
                   'cursor-pointer appearance-none border-none bg-transparent font-body font-medium focus:outline-none pr-0.5',
-                  isCompact ? 'text-[11px]' : 'text-[12px]'
+                  isCompact ? 'text-[10px]' : 'text-[12px]'
                 )}
               >
                 {timeOptions.map((t) => (
@@ -198,7 +198,7 @@ export function DateTimePicker({
                 }}
                 className={cn(
                   'cursor-pointer appearance-none border-none bg-transparent font-body font-medium focus:outline-none pr-0.5',
-                  isCompact ? 'text-[11px]' : 'text-[12px]'
+                  isCompact ? 'text-[10px]' : 'text-[12px]'
                 )}
               >
                 {timeOptions.map((t) => (
@@ -214,7 +214,7 @@ export function DateTimePicker({
           <div
             className={cn(
               'flex items-center gap-1.5 overflow-hidden rounded-full border border-primary/5 bg-primary/5 text-primary transition-all hover:bg-primary/10',
-              isCompact ? 'px-2.5 py-1.5' : 'px-3 py-2'
+              isCompact ? 'px-2 py-1' : 'px-3 py-2'
             )}
           >
             <Globe className="w-3.5 h-3.5 text-primary/60 shrink-0" />
@@ -225,7 +225,7 @@ export function DateTimePicker({
               }}
               className={cn(
                 'max-w-[80px] truncate cursor-pointer appearance-none border-none bg-transparent font-body font-medium focus:outline-none pr-0.5',
-                isCompact ? 'text-[11px]' : 'text-[12px]'
+                isCompact ? 'text-[10px]' : 'text-[12px]'
               )}
             >
               {timezones.map((tz) => (
@@ -240,7 +240,7 @@ export function DateTimePicker({
           <div
             className={cn(
               'flex items-center gap-1.5 overflow-hidden rounded-full border border-primary/5 bg-primary/5 text-primary transition-all hover:bg-primary/10',
-              isCompact ? 'px-2.5 py-1.5' : 'px-3 py-2'
+              isCompact ? 'px-2 py-1' : 'px-3 py-2'
             )}
           >
             <Bell className="w-3.5 h-3.5 text-primary/60 shrink-0" />
@@ -253,7 +253,7 @@ export function DateTimePicker({
               }}
               className={cn(
                 'max-w-[140px] truncate cursor-pointer appearance-none border-none bg-transparent font-body font-medium focus:outline-none pr-1',
-                isCompact ? 'text-[11px]' : 'text-[13px]'
+                isCompact ? 'text-[10px]' : 'text-[13px]'
               )}
             >
               {reminderOptions.map((opt) => (
@@ -268,7 +268,7 @@ export function DateTimePicker({
 
       {/* All Day Toggle */}
       {date && (
-        <div className={cn('flex items-center px-1.5', isCompact ? 'space-x-2' : 'space-x-3 px-2')}>
+        <div className={cn('flex items-center px-1', isCompact ? 'space-x-1.5' : 'space-x-3 px-2')}>
           <Checkbox.Root
             id="all-day"
             checked={isAllDay || false}
@@ -278,18 +278,18 @@ export function DateTimePicker({
             }}
             className={cn(
               'flex items-center justify-center rounded-lg border border-primary/20 bg-white shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-on-primary',
-              isCompact ? 'h-4 w-4' : 'h-5 w-5'
+              isCompact ? 'h-3.5 w-3.5' : 'h-5 w-5'
             )}
           >
             <Checkbox.Indicator>
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className={cn(isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
             </Checkbox.Indicator>
           </Checkbox.Root>
           <Label.Root
             htmlFor="all-day"
             className={cn(
               'cursor-pointer font-body font-medium leading-none text-primary/60 transition-colors hover:text-primary',
-              isCompact ? 'text-[12px]' : 'text-[13px]'
+              isCompact ? 'text-[11px]' : 'text-[13px]'
             )}
           >
             All day event
