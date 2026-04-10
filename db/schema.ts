@@ -33,6 +33,7 @@ export const tasks = sqliteTable('tasks', {
   status: text('status').default('todo'), // 'todo', 'in-progress', 'done'
   quadrant: text('quadrant'), // 'urgent-important', 'not-urgent-important', 'urgent-not-important', 'not-urgent-not-important'
   parentId: text('parent_id'), // Self-referencing for subtasks
+  customScheduleId: text('custom_schedule_id').references(() => customSchedules.id), // Added to isolate custom schedule tasks
   recurrence: text('recurrence'), // e.g., 'daily', 'weekly', etc.
   completedOccurrences: text('completed_occurrences'), // JSON array of YYYY-MM-DD occurrence keys
   deletedOccurrences: text('deleted_occurrences'), // JSON array of YYYY-MM-DD occurrence keys

@@ -32,6 +32,7 @@ export async function createTask(data: {
   timezone?: string;
   isCompleted?: boolean;
   userId: string;
+  customScheduleId?: string;
   recurrence?: string;
   completedOccurrences?: string;
   deletedOccurrences?: string;
@@ -66,6 +67,7 @@ export async function createTask(data: {
       isAllDay: data.isAllDay || false,
       timezone: data.timezone || null,
       parentId: data.parentId || null,
+      customScheduleId: data.customScheduleId || null,
       quadrant: data.quadrant || null,
       priority: data.priority ?? 0,
       isCompleted: data.isCompleted ?? data.status === 'done',

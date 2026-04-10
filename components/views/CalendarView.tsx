@@ -364,6 +364,7 @@ export function CalendarView() {
         description: showDetails ? (calendarDescription || null) : null,
         quadrant: showDetails ? calendarQuadrant : null,
         parentId: null,
+        customScheduleId: activeScheduleView.type === 'custom' ? activeScheduleView.scheduleId : null,
         timezone: null,
         reminderAt: null,
         status: showDetails ? calendarStatus : 'todo',
@@ -382,6 +383,7 @@ export function CalendarView() {
           status: showDetails ? calendarStatus : undefined,
           quadrant: showDetails ? calendarQuadrant || undefined : undefined,
           recurrence: recurrenceValue || undefined,
+          customScheduleId: activeScheduleView.type === 'custom' ? activeScheduleView.scheduleId : undefined,
         }));
         updateTaskState(tempId, { id });
       } catch (error) {
@@ -400,6 +402,15 @@ export function CalendarView() {
 
   const getDayTaskItems = useCallback((day: Date) => (
     tasks
+      .filter((task) => {
+        // Isolation logic: 
+        // 1. If in a custom schedule view, only show tasks explicitly linked to it.
+        // 2. If in month view, only show default tasks (no customScheduleId).
+        if (activeScheduleView.type === 'custom') {
+          return task.customScheduleId === activeScheduleView.scheduleId;
+        }
+        return !task.customScheduleId;
+      })
       .flatMap((task) => (
         getTaskOccurrences(task, startOfDay(day), endOfDay(day), {
           includeCompleted: true,
@@ -687,7 +698,8 @@ export function CalendarView() {
 
                         <div className="mt-4 space-y-2">
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               activateMonthView(activeMonthCursor);
                               setIsScheduleLibraryOpen(false);
                             }}
@@ -737,7 +749,10 @@ export function CalendarView() {
                                   )}
                                 >
                                   <button
-                                    onClick={() => handleSelectSavedSchedule(schedule.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectSavedSchedule(schedule.id);
+                                    }}
                                     className="min-w-0 flex-1 text-left"
                                   >
                                     <p className="truncate text-sm font-body font-medium text-primary">

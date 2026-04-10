@@ -42,6 +42,7 @@ export interface Task {
   timezone: string | null;
   reminderAt: Date | null;
   status: 'todo' | 'in-progress' | 'done' | null;
+  customScheduleId: string | null;
   recurrence: string | null; // Can be simple string ("daily", "weekly") or JSON string for "custom"
   completedOccurrences: string | null;
   deletedOccurrences: string | null;
@@ -155,6 +156,7 @@ const normalizeTask = (task: Partial<Task> & Pick<Task, 'id' | 'title'>): Task =
   timezone: task.timezone ?? null,
   reminderAt: normalizeDate(task.reminderAt),
   status: task.status ?? 'todo',
+  customScheduleId: task.customScheduleId ?? null,
   recurrence: task.recurrence ?? null,
   completedOccurrences: task.completedOccurrences ?? null,
   deletedOccurrences: task.deletedOccurrences ?? null,
