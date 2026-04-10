@@ -7,3 +7,4 @@ tmp/
 tsconfig.tsbuildinfo
 .env*
 !.env.example
+.venv/
